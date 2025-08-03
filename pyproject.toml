@@ -1,0 +1,9 @@
+[project]
+name = "pico-led-display"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "adafruit-circuitpython-ht16k33>=4.6.14",
+]
