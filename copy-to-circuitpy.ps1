@@ -1,8 +1,15 @@
-# CIRCUITPYドライブを自動検出し、code.pyをコピーするスクリプト
+# CIRCUITPYドライブを自動検出し、必要なファイル・ディレクトリをコピーするスクリプト
+# -WithLib オプション指定時のみ lib のコピーを行う
 # コピー先が見つからなければ中止
 
-$source = Join-Path $PSScriptRoot "code.py"
+param(
+    [switch]$WithLib
+)
+
+$sourceCode = Join-Path $PSScriptRoot "code.py"
+$sourceGames = Join-Path $PSScriptRoot "games"
 $targetFile = "code.py"
+$targetGames = "games"
 
 # CIRCUITPYドライブをラベルで探す
 $drive = Get-Volume | Where-Object { $_.FileSystemLabel -eq "CIRCUITPY" } | Select-Object -First 1
@@ -12,16 +19,35 @@ if ($null -eq $drive) {
     exit 1
 }
 
- $target = "$($drive.DriveLetter):\$targetFile"
-Copy-Item -Path $source -Destination $target -Force
+$target = "$($drive.DriveLetter):\$targetFile"
+Copy-Item -Path $sourceCode -Destination $target -Force
 Write-Host "code.py を $target にコピーしました。"
 
-# adafruit_ht16k33 フォルダを lib ディレクトリにコピー
-$srcLib = Join-Path $PSScriptRoot ".venv\Lib\site-packages\adafruit_ht16k33"
-$dstLib = "$($drive.DriveLetter):\lib\adafruit_ht16k33"
-if (Test-Path $srcLib) {
-    Copy-Item -Path $srcLib -Destination $dstLib -Recurse -Force
-    Write-Host "adafruit_ht16k33 を $dstLib にコピーしました。"
+# gamesディレクトリの中身のみをコピー
+$dstGames = "$($drive.DriveLetter):\$targetGames"
+if (Test-Path $sourceGames) {
+    if (-not (Test-Path $dstGames)) {
+        New-Item -Path $dstGames -ItemType Directory | Out-Null
+    }
+    Get-ChildItem -Path $sourceGames | ForEach-Object {
+        $itemName = $_.Name
+        $src = Join-Path $sourceGames $itemName
+        $dst = Join-Path $dstGames $itemName
+        Copy-Item -Path $src -Destination $dst -Recurse -Force
+    }
+    Write-Host "games ディレクトリの中身を $dstGames にコピーしました。"
 } else {
-    Write-Host "adafruit_ht16k33 フォルダが見つかりません。"
+    Write-Host "games ディレクトリが見つかりません。"
+}
+
+# -WithLib オプション指定時のみ lib/adafruit_ht16k33 をコピー
+if ($WithLib) {
+    $srcLib = Join-Path $PSScriptRoot ".venv\Lib\site-packages\adafruit_ht16k33"
+    $dstLib = "$($drive.DriveLetter):\lib\adafruit_ht16k33"
+    if (Test-Path $srcLib) {
+        Copy-Item -Path $srcLib -Destination $dstLib -Recurse -Force
+        Write-Host "adafruit_ht16k33 を $dstLib にコピーしました。"
+    } else {
+        Write-Host "adafruit_ht16k33 フォルダが見つかりません。"
+    }
 }
