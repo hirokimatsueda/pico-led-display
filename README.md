@@ -25,6 +25,16 @@ Raspberry Pi Pico 2 WH と Adafruit 902 (HT16K33 8x8 LED マトリクス) を使
 
 ## 使い方
 
+### Python 依存パッケージのインストール（uv）
+
+1. コマンドラインでプロジェクトルートに移動
+2. `uv sync` を実行
+   ```sh
+   uv sync
+   ```
+
+これで `pyproject.toml`/`uv.lock` に記載された依存パッケージがインストールされます。
+
 ### CIRCUITPY へのファイルコピー
 
 1. VS Code のコマンドパレット（Ctrl+Shift+P）を開く
