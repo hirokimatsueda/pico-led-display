@@ -51,26 +51,27 @@ class FallingDotGame(Game):
     def __init__(self, devices):
         super().__init__(devices)
 
-        self.width = self.devices.matrix.columns
-        self.height = self.devices.matrix.rows
-
     def initialize(self):
-        # プレイヤー初期位置（下中央）
-        self.player_x = self.width // 2 - 1
-        self.player_y = self.height - 2
+        # ゲーム状態の初期化
         self.is_running = True
+
+        # プレイヤー初期位置（下中央）
+        self.player_x = self.matrix_width // 2 - 1
+        self.player_y = self.matrix_height - 2
+
         # 落下ドット（1個のみ）
         self.dot = None
         self.spawn_dot()
+
         # ドット落下タイマー
         self.last_drop_time = time.monotonic()
 
     def spawn_dot(self):
         # 新しいドットを生成（1個のみ）
-        self.dot = FallingDot(random.randint(0, self.width - 1), 0)
+        self.dot = FallingDot(random.randint(0, self.matrix_width - 1), 0)
 
     def update(self):
-        m = self.devices.matrix
+        m = self.matrix
 
         if not self.is_running:
             # ゲームが終了している場合は画面を赤くして終了
@@ -82,32 +83,32 @@ class FallingDotGame(Game):
         m.fill(0)
 
         # プレイヤー操作
-        if self.devices.button_a and not self.devices.button_a.value:
+        if self.button_a and not self.button_a.value:
             self.player_x = max(0, self.player_x - 1)
-        if self.devices.button_b and not self.devices.button_b.value:
-            self.player_x = min(self.width - 2, self.player_x + 1)
+        if self.button_b and not self.button_b.value:
+            self.player_x = min(self.matrix_width - 2, self.player_x + 1)
 
         # 0.5秒ごとにドット落下
         now = time.monotonic()
         if now - self.last_drop_time >= 0.5:
             self.last_drop_time = now
             if self.dot and self.dot.is_visible:
-                self.dot.move(self.height)
+                self.dot.move(self.matrix_height)
             # 画面外に出たら新規生成
             if not self.dot.is_visible:
                 self.spawn_dot()
 
         # ドット表示
         if self.dot and self.dot.is_visible:
-            m[self.dot.x, self.dot.y] = self.devices.matrix.LED_YELLOW
+            m[self.dot.x, self.dot.y] = m.LED_YELLOW
 
         # プレイヤー表示（2x2緑）
         for dx in range(2):
             for dy in range(2):
                 px = self.player_x + dx
                 py = self.player_y + dy
-                if 0 <= px < self.width and 0 <= py < self.height:
-                    m[px, py] = self.devices.matrix.LED_GREEN
+                if 0 <= px < self.matrix_width and 0 <= py < self.matrix_height:
+                    m[px, py] = m.LED_GREEN
 
         # 衝突判定（表示中のドットのみ）
         if self.dot and self.dot.is_visible:
@@ -121,5 +122,5 @@ class FallingDotGame(Game):
         m.show()
 
     def finalize(self):
-        self.devices.matrix.fill(0)
-        self.devices.matrix.show()
+        self.matrix.fill(0)
+        self.matrix.show()
