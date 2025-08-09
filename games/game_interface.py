@@ -1,12 +1,20 @@
+from games.device_manager import DeviceManager
+
+
 class Game:
-    def __init__(self, matrix):
-        self.matrix = matrix
+    """
+    ゲームの基本インターフェース
+    各ゲームはこのクラスを継承して実装する必要があります。
+    """
+
+    def __init__(self, devices: DeviceManager):
+        self.devices = devices
 
     def initialize(self):
-        pass
+        raise NotImplementedError("Subclasses should implement this method")
 
     def update(self):
-        pass
+        raise NotImplementedError("Subclasses should implement this method")
 
     def finalize(self):
-        pass
+        raise NotImplementedError("Subclasses should implement this method")

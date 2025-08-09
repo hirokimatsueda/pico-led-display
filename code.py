@@ -1,23 +1,8 @@
-"""
-Adafruit 902 (HT16K33 8x8 LEDマトリクス) を使い、
-点が重力で跳ねる動きを表示するサンプル。
-"""
-
-import board
-import busio
 import time
-from adafruit_ht16k33.matrix import Matrix8x8x2
+from games.device_manager import DeviceManager
 from games.bouncing_ball import BouncingBallGame
 
 FPS = 60  # フレームレート
-
-# LEDマトリクス初期化
-i2c = busio.I2C(board.GP17, board.GP16)
-matrix = Matrix8x8x2(i2c)
-
-# ここで他のゲームクラスも定義できる
-# class AnotherGame(Game):
-#     ...
 
 # ゲーム切り替え用変数
 GAME_LIST = [BouncingBallGame]
@@ -25,22 +10,36 @@ GAME_INDEX = 0  # ここを変更してゲームを切り替え
 
 
 def main():
-    game = GAME_LIST[GAME_INDEX](matrix)
+    """
+    Raspberry Pi Pico用のLEDディスプレイゲームのメインループ
+    このスクリプトは、ゲームの初期化、更新、描画を行い、フレームレートを制御します。
+    """
+
+    # デバイス（LED, 7セグ, ボタン等）を初期化
+    devices = DeviceManager()
+
+    # 選択されたゲームのインスタンスを生成
+    game = GAME_LIST[GAME_INDEX](devices)
+
+    # ゲームの初期化処理（画面や内部状態のリセット等）
     game.initialize()
     try:
         while True:
+            # ループ開始時刻を記録（フレームレート制御用）
             start_time = time.monotonic()
 
-            # ゲームの更新
+            # ゲームの状態更新・描画
             game.update()
 
-            # フレームレート制御
+            # フレームレート維持のための待機時間計算
             elapsed = time.monotonic() - start_time
             sleep_time = max(0, (1.0 / FPS) - elapsed)
             time.sleep(sleep_time)
     except KeyboardInterrupt:
+        # シリアルモニターからCtrl+C等で終了した場合の処理
         pass
     finally:
+        # ゲーム終了時の後処理（画面クリア等）
         game.finalize()
 
 

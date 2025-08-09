@@ -1,8 +1,17 @@
-from .game_interface import Game
+from games.game_interface import Game
 
 
 class BouncingBallGame(Game):
+    """
+    ボールが跳ねるゲーム
+    """
+
     class Ball:
+        """
+        ボールのクラス
+        ボールの位置と速度を管理し、重力の影響を受けて跳ねる動きを実装します。
+        """
+
         def __init__(self, x, y, vx):
             self.x = x
             self.y = y
@@ -24,22 +33,38 @@ class BouncingBallGame(Game):
                 self.y = 7
                 self.vy = -1
 
+    def __init__(self, devices):
+        super().__init__(devices)
+
     def initialize(self):
         self.ball = self.Ball(x=0, y=7, vx=0.2)
         self.prev_x = int(self.ball.x)
         self.prev_y = int(self.ball.y)
 
     def update(self):
-        self.matrix.fill(0)
-        # 残像（前回位置）
-        self.matrix[self.prev_x, self.prev_y] = 3
+        # 画面をクリア
+        self.devices.matrix.fill(0)
+
+        # 残像（前回位置）を表示
+        self.devices.matrix[self.prev_x, self.prev_y] = 3
         self.ball.update()
-        # 現在位置
-        self.matrix[int(self.ball.x), int(self.ball.y)] = 1
+
+        # 現在位置を表示
+        self.devices.matrix[int(self.ball.x), int(self.ball.y)] = 1
+
+        # 前回位置を更新
         self.prev_x = int(self.ball.x)
         self.prev_y = int(self.ball.y)
-        self.matrix.show()
+
+        # ボタンの状態表示
+        if self.devices.button_a and not self.devices.button_a.value:
+            self.devices.matrix[0, 0] = 2
+        if self.devices.button_b and not self.devices.button_b.value:
+            self.devices.matrix[7, 0] = 2
+
+        # 表示更新
+        self.devices.matrix.show()
 
     def finalize(self):
-        self.matrix.fill(0)
-        self.matrix.show()
+        self.devices.matrix.fill(0)
+        self.devices.matrix.show()
