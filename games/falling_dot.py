@@ -61,6 +61,8 @@ class FallingDotGame(Game):
 
         # 落下ドット（1個のみ）
         self.dot = None
+        # ドット落下速度（秒）
+        self.dot_speed = 0.5
         self.spawn_dot()
 
         # ドット落下タイマー
@@ -69,6 +71,8 @@ class FallingDotGame(Game):
     def spawn_dot(self):
         # 新しいドットを生成（1個のみ）
         self.dot = FallingDot(random.randint(0, self.matrix_width - 1), 0)
+        # 新規生成ごとに速度を1.1で割る（加速）
+        self.dot_speed /= 1.1
 
     def update(self):
         m = self.matrix
@@ -88,9 +92,9 @@ class FallingDotGame(Game):
         if self.button_b and not self.button_b.value:
             self.player_x = min(self.matrix_width - 2, self.player_x + 1)
 
-        # 0.5秒ごとにドット落下
+        # dot_speed秒ごとにドット落下
         now = time.monotonic()
-        if now - self.last_drop_time >= 0.5:
+        if now - self.last_drop_time >= self.dot_speed:
             self.last_drop_time = now
             if self.dot and self.dot.is_visible:
                 self.dot.move(self.matrix_height)
