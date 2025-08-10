@@ -1,12 +1,14 @@
 import time
 from games.device_manager import DeviceManager
-from games.bouncing_ball import BouncingBallGame
 
-FPS = 60  # フレームレート
+from games.bouncing_ball import BouncingBallGame
+from games.falling_dot import FallingDotGame
+
+FPS = 50  # フレームレート
 
 # ゲーム切り替え用変数
-GAME_LIST = [BouncingBallGame]
-GAME_INDEX = 0  # ここを変更してゲームを切り替え
+GAME_LIST = [BouncingBallGame, FallingDotGame]
+GAME_INDEX = 1  # ここを変更してゲームを切り替え
 
 
 def main():

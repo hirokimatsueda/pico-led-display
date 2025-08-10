@@ -8,7 +8,27 @@ class Game:
     """
 
     def __init__(self, devices: DeviceManager):
-        self.devices = devices
+        self._devices = devices
+
+    @property
+    def matrix(self):
+        return self._devices.matrix
+
+    @property
+    def button_a(self):
+        return self._devices.button_a
+
+    @property
+    def button_b(self):
+        return self._devices.button_b
+
+    @property
+    def matrix_width(self):
+        return self.matrix.columns
+
+    @property
+    def matrix_height(self):
+        return self.matrix.rows
 
     def initialize(self):
         raise NotImplementedError("Subclasses should implement this method")

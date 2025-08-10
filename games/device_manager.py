@@ -13,7 +13,7 @@ class DeviceManager:
 
     def __init__(self):
         # LEDマトリクス初期化
-        self._i2c_0 = busio.I2C(board.GP17, board.GP16)
+        self._i2c_0 = busio.I2C(board.GP17, board.GP16, frequency=400000)
         self._matrix = Matrix8x8x2(self._i2c_0)
 
         # 7セグメントディスプレイ初期化（必要ならコメント解除）
