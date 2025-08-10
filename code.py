@@ -4,7 +4,7 @@ from games.device_manager import DeviceManager
 from games.bouncing_ball import BouncingBallGame
 from games.falling_dot import FallingDotGame
 
-FPS = 60  # フレームレート
+FPS = 50  # フレームレート
 
 # ゲーム切り替え用変数
 GAME_LIST = [BouncingBallGame, FallingDotGame]
