@@ -15,12 +15,12 @@ class Game:
         return self._devices.matrix
 
     @property
-    def button_a(self):
-        return self._devices.button_a
+    def btn_a(self):
+        return self._devices.btn_a
 
     @property
-    def button_b(self):
-        return self._devices.button_b
+    def btn_b(self):
+        return self._devices.btn_b
 
     @property
     def matrix_width(self):
