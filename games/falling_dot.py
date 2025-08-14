@@ -82,6 +82,11 @@ class FallingDotGame(Game):
         if self.dot_count is not None:
             self.dot_count += 1
 
+        # 7セグメントディスプレイをクリアして得点表示
+        self._devices.seg.fill(0)  # 7セグメントディスプレイをクリア
+        self._devices.seg.print(str(self.dot_count - 1))
+        self._devices.seg.show()
+
     def update(self):
         m = self.matrix
 
@@ -90,11 +95,13 @@ class FallingDotGame(Game):
                 self.score_shown = True
 
                 print(f"Game over. score = {self.dot_count - 1}\n")
-                # ゲームが終了している場合は得点を表示（1回だけm.show）
-                m.fill(m.LED_OFF)
-                self.show_count(self.dot_count - 1)  # 最初の生成分を除外
+                # ゲームが終了している場合は赤枠を表示（1回だけm.show）
+                self.show_error()
                 m.show()
-            # 以降は何も表示しない
+
+            # 以降は何も表示しないが、ボタンクリックで再スタート可能
+            if self.button_a and not self.button_a.value:
+                self.initialize()
             return
 
         # 画面をクリア
@@ -139,98 +146,18 @@ class FallingDotGame(Game):
 
         m.show()
 
-    def show_count(self, count):
+    def show_error(self):
+        """ゲームオーバー時に赤枠を表示"""
+
         m = self.matrix
 
-        # 2桁の数字を3x5領域で表示（LED_GREEN）
-        # 0-9のみ対応、各桁3x5で表示
-        # 7セグメント風パターン（3x5）
-        segment_patterns = {
-            0: [
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 0, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-            ],
-            1: [
-                [0, 1, 0],
-                [0, 1, 1],
-                [0, 1, 0],
-                [0, 1, 0],
-                [1, 1, 1],
-            ],
-            2: [
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 1, 1],
-                [0, 0, 1],
-                [1, 1, 1],
-            ],
-            3: [
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 1, 1],
-            ],
-            4: [
-                [1, 0, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 0, 0],
-            ],
-            5: [
-                [1, 1, 1],
-                [0, 0, 1],
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 1, 1],
-            ],
-            6: [
-                [1, 1, 1],
-                [0, 0, 1],
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-            ],
-            7: [
-                [1, 1, 1],
-                [1, 0, 0],
-                [0, 1, 0],
-                [0, 1, 0],
-                [0, 1, 0],
-            ],
-            8: [
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-            ],
-            9: [
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 1, 1],
-                [1, 0, 0],
-                [1, 1, 1],
-            ],
-        }
-        # 2桁に丸める
-        c = max(0, min(99, count))
-        left = c % 10
-        right = c // 10
-        # 左桁（十の位）: x=0..2, y=0..4
-        for j in range(5):
-            for i in range(3):
-                if segment_patterns[left][j][i]:
-                    m[i, j] = m.LED_GREEN
-        # 右桁（一の位）: x=4..6, y=0..4
-        for j in range(5):
-            for i in range(3):
-                if segment_patterns[right][j][i]:
-                    m[i + 4, j] = m.LED_GREEN
+        # 外周に赤色を表示
+        for x in range(self.matrix_width):
+            m[x, 0] = m.LED_RED
+            m[x, self.matrix_height - 1] = m.LED_RED
+        for y in range(self.matrix_height):
+            m[0, y] = m.LED_RED
+            m[self.matrix_width - 1, y] = m.LED_RED
 
     def finalize(self):
         self.matrix.fill(0)

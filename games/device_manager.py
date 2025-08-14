@@ -17,8 +17,8 @@ class DeviceManager:
         self._matrix = Matrix8x8x2(self._i2c_0)
 
         # 7セグメントディスプレイ初期化（必要ならコメント解除）
-        # self._i2c_1 = busio.I2C(board.GP15, board.GP14)
-        # self._seg = Seg7x4(self._i2c_1)
+        self._i2c_1 = busio.I2C(board.GP15, board.GP14)
+        self._seg = Seg7x4(self._i2c_1)
 
         # ボタン初期化
         self._button_a = digitalio.DigitalInOut(board.GP0)
@@ -34,10 +34,10 @@ class DeviceManager:
         """LEDマトリクスへのアクセス"""
         return self._matrix
 
-    # 7セグメントディスプレイ（必要ならコメント解除）
-    # @property
-    # def seg(self) -> Seg7x4:
-    #     return self._seg
+    @property
+    def seg(self) -> Seg7x4:
+        """7セグメントディスプレイへのアクセス"""
+        return self._seg
 
     @property
     def button_a(self) -> digitalio.DigitalInOut:

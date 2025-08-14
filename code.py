@@ -8,7 +8,7 @@ FPS = 50  # フレームレート
 
 # ゲーム切り替え用変数
 GAME_LIST = [BouncingBallGame, FallingDotGame]
-GAME_INDEX = 1  # ここを変更してゲームを切り替え
+GAME_INDEX = 1
 
 
 def main():
