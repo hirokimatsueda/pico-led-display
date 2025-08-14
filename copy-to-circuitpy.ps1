@@ -1,87 +1,126 @@
 # CIRCUITPYドライブを自動検出し、必要なファイル・ディレクトリをコピーするスクリプト
 # -WithLib オプション指定時のみ lib のコピーを行う
-# コピー先が見つからなければ中止
 
 param(
     [switch]$WithLib
 )
 
-$sourceCode = Join-Path $PSScriptRoot "code.py"
-$sourceGames = Join-Path $PSScriptRoot "games"
-$targetFile = "code.py"
-$targetGames = "games"
-
-# CIRCUITPYドライブをラベルで探す
-$drive = Get-Volume | Where-Object { $_.FileSystemLabel -eq "CIRCUITPY" } | Select-Object -First 1
-
-if ($null -eq $drive) {
-    Write-Host "CIRCUITPYドライブが見つかりません。コピーを中止します。"
-    exit 1
+# 設定
+$DRIVE_LABEL = "CIRCUITPY"
+$SOURCE_PATHS = @{
+    Code = "code.py"
+    Games = "games"
+    VenvLibs = ".venv\Lib\site-packages"
 }
 
-$target = "$($drive.DriveLetter):\$targetFile"
-Copy-Item -Path $sourceCode -Destination $target -Force
-Write-Host "code.py を $target にコピーしました。"
+$LIB_ITEMS = @(
+    @{ Type = "Directory"; Name = "adafruit_ht16k33" }
+    @{ Type = "File"; Name = "adafruit_debouncer.py" }
+    @{ Type = "File"; Name = "adafruit_ticks.py" }
+)
 
-# gamesディレクトリの中身のみをコピー
-$dstGames = "$($drive.DriveLetter):\$targetGames"
-if (Test-Path $sourceGames) {
-    if (-not (Test-Path $dstGames)) {
-        New-Item -Path $dstGames -ItemType Directory | Out-Null
+# ヘルパー関数
+function Find-CircuitPyDrive {
+    $drive = Get-Volume | Where-Object { $_.FileSystemLabel -eq $DRIVE_LABEL } | Select-Object -First 1
+    if ($null -eq $drive) {
+        Write-Host "CIRCUITPYドライブが見つかりません。コピーを中止します。" -ForegroundColor Red
+        exit 1
     }
-    Get-ChildItem -Path $sourceGames | Where-Object { $_.Name -ne ".mypy_cache" } | ForEach-Object {
-        $itemName = $_.Name
-        $src = Join-Path $sourceGames $itemName
-        $dst = Join-Path $dstGames $itemName
-        Copy-Item -Path $src -Destination $dst -Recurse -Force
-    }
-    Write-Host "games ディレクトリの中身を $dstGames にコピーしました。"
-} else {
-    Write-Host "games ディレクトリが見つかりません。"
+    return "$($drive.DriveLetter):\"
 }
 
-# -WithLib オプション指定時のみ lib 配下のライブラリをコピー
-if ($WithLib) {
-    $dstLib = "$($drive.DriveLetter):\lib"
-    if (-not (Test-Path $dstLib)) {
-        New-Item -Path $dstLib -ItemType Directory | Out-Null
+function Copy-ItemSafely {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [switch]$Recurse,
+        [string]$ItemName
+    )
+    
+    if (Test-Path $Source) {
+        Copy-Item -Path $Source -Destination $Destination -Recurse:$Recurse -Force
+        Write-Host "$ItemName を $Destination にコピーしました。" -ForegroundColor Green
+    } else {
+        Write-Host "$ItemName が見つかりません。処理を中止します。" -ForegroundColor Red
+        exit 1
     }
+}
 
-    # adafruit_ht16k33 ディレクトリの中身のみをコピー
-    $srcLib = Join-Path $PSScriptRoot ".venv\Lib\site-packages\adafruit_ht16k33"
-    if (Test-Path $srcLib) {
-        $dstHt16k33 = Join-Path $dstLib "adafruit_ht16k33"
-        if (-not (Test-Path $dstHt16k33)) {
-            New-Item -Path $dstHt16k33 -ItemType Directory | Out-Null
-        }
-        Get-ChildItem -Path $srcLib | Where-Object { $_.Name -ne ".mypy_cache" } | ForEach-Object {
-            $itemName = $_.Name
-            $src = Join-Path $srcLib $itemName
-            $dst = Join-Path $dstHt16k33 $itemName
+function New-DirectoryIfNotExists {
+    param([string]$Path)
+    
+    if (-not (Test-Path $Path)) {
+        New-Item -Path $Path -ItemType Directory | Out-Null
+    }
+}
+
+function Copy-DirectoryContents {
+    param(
+        [string]$SourceDir,
+        [string]$DestinationDir,
+        [string[]]$ExcludeItems = @(".mypy_cache")
+    )
+    
+    if (-not (Test-Path $SourceDir)) {
+        Write-Host "$SourceDir が見つかりません。処理を中止します。" -ForegroundColor Red
+        exit 1
+    }
+    
+    New-DirectoryIfNotExists -Path $DestinationDir
+    
+    Get-ChildItem -Path $SourceDir | 
+        Where-Object { $_.Name -notin $ExcludeItems } | 
+        ForEach-Object {
+            $src = $_.FullName
+            $dst = Join-Path $DestinationDir $_.Name
             Copy-Item -Path $src -Destination $dst -Recurse -Force
         }
-        Write-Host "adafruit_ht16k33 の中身を $dstHt16k33 にコピーしました。"
-    } else {
-        Write-Host "adafruit_ht16k33 フォルダが見つかりません。"
+}
+
+# メイン処理
+try {
+    # CIRCUITPYドライブを検出
+    $targetDrive = Find-CircuitPyDrive
+    Write-Host "CIRCUITPYドライブを検出: $targetDrive" -ForegroundColor Cyan
+
+    # code.py のコピー
+    $sourceCode = Join-Path $PSScriptRoot $SOURCE_PATHS.Code
+    $targetCode = Join-Path $targetDrive "code.py"
+    Copy-ItemSafely -Source $sourceCode -Destination $targetCode -ItemName "code.py"
+
+    # games ディレクトリのコピー
+    $sourceGames = Join-Path $PSScriptRoot $SOURCE_PATHS.Games
+    $targetGames = Join-Path $targetDrive "games"
+    
+    Copy-DirectoryContents -SourceDir $sourceGames -DestinationDir $targetGames
+    Write-Host "games ディレクトリの中身を $targetGames にコピーしました。" -ForegroundColor Green
+
+    # -WithLib オプション処理
+    if ($WithLib) {
+        Write-Host "ライブラリファイルのコピーを開始します..." -ForegroundColor Cyan
+        
+        $targetLib = Join-Path $targetDrive "lib"
+        New-DirectoryIfNotExists -Path $targetLib
+        
+        $venvLibPath = Join-Path $PSScriptRoot $SOURCE_PATHS.VenvLibs
+        
+        foreach ($item in $LIB_ITEMS) {
+            $sourcePath = Join-Path $venvLibPath $item.Name
+            
+            if ($item.Type -eq "Directory") {
+                $targetPath = Join-Path $targetLib $item.Name
+                Copy-DirectoryContents -SourceDir $sourcePath -DestinationDir $targetPath
+                Write-Host "$($item.Name) の中身を $targetPath にコピーしました。" -ForegroundColor Green
+            } else {
+                $targetPath = Join-Path $targetLib $item.Name
+                Copy-ItemSafely -Source $sourcePath -Destination $targetPath -ItemName $item.Name
+            }
+        }
     }
 
-    # adafruit_debouncer.py ファイルをコピー
-    $srcLib = Join-Path $PSScriptRoot ".venv\Lib\site-packages\adafruit_debouncer.py"
-    if (Test-Path $srcLib) {
-        $dst = Join-Path $dstLib "adafruit_debouncer.py"
-        Copy-Item -Path $srcLib -Destination $dst -Force
-        Write-Host "adafruit_debouncer.py を $dst にコピーしました。"
-    } else {
-        Write-Host "adafruit_debouncer.py ファイルが見つかりません。"
-    }
-
-    # adafruit_ticks.py ファイルをコピー
-    $srcLib = Join-Path $PSScriptRoot ".venv\Lib\site-packages\adafruit_ticks.py"
-    if (Test-Path $srcLib) {
-        $dst = Join-Path $dstLib "adafruit_ticks.py"
-        Copy-Item -Path $srcLib -Destination $dst -Force
-        Write-Host "adafruit_ticks.py を $dst にコピーしました。"
-    } else {
-        Write-Host "adafruit_ticks.py ファイルが見つかりません。"
-    }
+    Write-Host "`nデプロイ処理が完了しました。" -ForegroundColor Green
+    
+} catch {
+    Write-Host "エラーが発生しました: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
 }
