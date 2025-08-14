@@ -100,7 +100,8 @@ class FallingDotGame(Game):
                 m.show()
 
             # 以降は何も表示しないが、ボタンクリックで再スタート可能
-            if self.button_a and not self.button_a.value:
+            self.btn_a.update()
+            if self.btn_a.fell:
                 self.initialize()
             return
 
@@ -108,9 +109,12 @@ class FallingDotGame(Game):
         m.fill(0)
 
         # プレイヤー操作
-        if self.button_a and not self.button_a.value:
+        self.btn_a.update()
+        if self.btn_a.fell:
             self.player_x = max(0, self.player_x - 1)
-        if self.button_b and not self.button_b.value:
+
+        self.btn_b.update()
+        if self.btn_b.fell:
             self.player_x = min(self.matrix_width - 2, self.player_x + 1)
 
         # dot_speed秒ごとにドット落下
