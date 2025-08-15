@@ -48,31 +48,43 @@ class BouncingBallGame(Game):
         )
         self.prev_x = int(self.ball.x)
         self.prev_y = int(self.ball.y)
+        self.btn_a_toggle = True
+        self.btn_b_toggle = True
 
     def update(self):
         # 画面をクリア
-        self.matrix.fill(0)
+        self.matrix.fill(self.matrix.LED_OFF)
 
         # 残像（前回位置）を表示
-        self.matrix[self.prev_x, self.prev_y] = 3
+        self.matrix[self.prev_x, self.prev_y] = self.matrix.LED_YELLOW
         self.ball.update()
 
         # 現在位置を表示
-        self.matrix[int(self.ball.x), int(self.ball.y)] = 1
+        self.matrix[int(self.ball.x), int(self.ball.y)] = self.matrix.LED_RED
 
         # 前回位置を更新
         self.prev_x = int(self.ball.x)
         self.prev_y = int(self.ball.y)
 
         # ボタンの状態表示
-        if self.button_a and not self.button_a.value:
-            self.matrix[0, 0] = 2
-        if self.button_b and not self.button_b.value:
-            self.matrix[7, 0] = 2
+        self.btn_a.update()
+        if self.btn_a.fell:
+            self.btn_a_toggle = not self.btn_a_toggle
+
+        self.btn_b.update()
+        if self.btn_b.fell:
+            self.btn_b_toggle = not self.btn_b_toggle
+
+        self.matrix[0, 0] = (
+            self.matrix.LED_GREEN if self.btn_a_toggle else self.matrix.LED_OFF
+        )
+        self.matrix[7, 0] = (
+            self.matrix.LED_GREEN if self.btn_b_toggle else self.matrix.LED_OFF
+        )
 
         # 表示更新
         self.matrix.show()
 
     def finalize(self):
-        self.matrix.fill(0)
+        self.matrix.fill(self.matrix.LED_OFF)
         self.matrix.show()

@@ -101,21 +101,24 @@ class FallingDotGame(Game):
 
             # 以降は何も表示しないが、ボタンクリックで再スタート可能
             self.btn_a.update()
-            if self.btn_a.fell:
+            self.btn_b.update()
+            if self.btn_a.fell and self.btn_b.fell:
                 self.initialize()
             return
 
-        # 画面をクリア
-        m.fill(0)
+        # オブジェクトの位置更新があったかどうか
+        obj_location_changed = False
 
         # プレイヤー操作
         self.btn_a.update()
         if self.btn_a.fell:
             self.player_x = max(0, self.player_x - 1)
+            obj_location_changed = True
 
         self.btn_b.update()
         if self.btn_b.fell:
             self.player_x = min(self.matrix_width - 2, self.player_x + 1)
+            obj_location_changed = True
 
         # dot_speed秒ごとにドット落下
         now = time.monotonic()
@@ -126,18 +129,7 @@ class FallingDotGame(Game):
             # 画面外に出たら新規生成
             if not self.dot.is_visible:
                 self.spawn_dot()
-
-        # ドット表示
-        if self.dot and self.dot.is_visible:
-            m[self.dot.x, self.dot.y] = m.LED_YELLOW
-
-        # プレイヤー表示（2x2緑）
-        for dx in range(2):
-            for dy in range(2):
-                px = self.player_x + dx
-                py = self.player_y + dy
-                if 0 <= px < self.matrix_width and 0 <= py < self.matrix_height:
-                    m[px, py] = m.LED_GREEN
+            obj_location_changed = True
 
         # 衝突判定（表示中のドットのみ）
         if self.dot and self.dot.is_visible:
@@ -148,7 +140,25 @@ class FallingDotGame(Game):
                     if px == self.dot.x and py == self.dot.y:
                         self.is_running = False
 
-        m.show()
+        # オブジェクトの位置が変わった場合のみ表示更新
+        if obj_location_changed:
+            # 画面をクリア
+            m.fill(m.LED_OFF)
+
+            # ドット表示
+            if self.dot and self.dot.is_visible:
+                m[self.dot.x, self.dot.y] = m.LED_YELLOW
+
+            # プレイヤー表示（2x2緑）
+            for dx in range(2):
+                for dy in range(2):
+                    px = self.player_x + dx
+                    py = self.player_y + dy
+                    if 0 <= px < self.matrix_width and 0 <= py < self.matrix_height:
+                        m[px, py] = m.LED_GREEN
+
+            # 表示更新
+            m.show()
 
     def show_error(self):
         """ゲームオーバー時に赤枠を表示"""
@@ -164,5 +174,5 @@ class FallingDotGame(Game):
             m[self.matrix_width - 1, y] = m.LED_RED
 
     def finalize(self):
-        self.matrix.fill(0)
+        self.matrix.fill(self.matrix.LED_OFF)
         self.matrix.show()
