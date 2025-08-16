@@ -1,4 +1,8 @@
 import time
+
+import board
+import rotaryio
+
 from games.device_manager import DeviceManager
 
 from games.bouncing_ball import BouncingBallGame
@@ -21,13 +25,24 @@ def main():
     # デバイス（LED, 7セグ, ボタン等）を初期化
     devices = DeviceManager()
 
+    # ゲーム選択のためのロータリーエンコーダー初期化
+    encoder = rotaryio.IncrementalEncoder(board.GP10, board.GP11)
+
     # 選択されたゲームのインスタンスを生成
     game = GAME_LIST[GAME_INDEX](devices)
 
     # ゲームの初期化処理（画面や内部状態のリセット等）
     game.initialize()
     try:
+        last_position = encoder.position
+
         while True:
+            # ロータリーエンコーダーの位置をチェック
+            current_position = encoder.position
+            if current_position != last_position:
+                print(f"Encoder position: {current_position}")
+                last_position = current_position
+
             # ループ開始時刻を記録（フレームレート制御用）
             start_time = time.monotonic()
 
