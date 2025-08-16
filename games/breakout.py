@@ -1,5 +1,4 @@
 from games.game_interface import Game
-import time
 
 
 class BreakoutGame(Game):
@@ -88,24 +87,12 @@ class BreakoutGame(Game):
 
     def __init__(self, devices):
         super().__init__(devices)
-        # パフォーマンス最適化用の変数
-        self._last_frame_time = 0
-        self._target_fps = 50
-        self._frame_interval = 1.0 / self._target_fps  # 20ms per frame
-        self._last_button_check = 0
-        self._button_check_interval = 0.01  # 10ms button polling interval
-
         # メモリ最適化: 事前に計算済みの値をキャッシュ
         self._paddle_positions_cache = None
         self._last_paddle_x = None
 
         # 描画最適化フラグ
         self._force_full_refresh = False
-
-        # パフォーマンス監視用
-        self._frame_count = 0
-        self._fps_check_time = 0
-        self._current_fps = 0
 
     def initialize(self):
         """ゲーム初期化処理"""
@@ -114,13 +101,6 @@ class BreakoutGame(Game):
         self.score_shown = False
         self.score = 0
         self.game_state = "playing"  # "playing", "game_over", "game_clear"
-
-        # パフォーマンス最適化: タイマーリセット
-        current_time = time.monotonic()
-        self._last_frame_time = current_time
-        self._last_button_check = current_time
-        self._fps_check_time = current_time
-        self._frame_count = 0
 
         # パドル初期配置（画面下部中央、Y=7）
         self.paddle = self.Paddle()
@@ -143,15 +123,7 @@ class BreakoutGame(Game):
         self.refresh()
 
     def update(self):
-        """ゲームループ処理 - 50FPS安定動作のための最適化"""
-        current_time = time.monotonic()
-
-        # フレームレート制御: 50FPS (20ms間隔) での安定動作
-        if (current_time - self._last_frame_time) < self._frame_interval:
-            return  # まだフレーム更新時間ではない
-
-        self._last_frame_time = current_time
-
+        """ゲームループ処理"""
         if not self.is_running:
             # ゲーム終了時の処理
             if not self.score_shown:
@@ -159,15 +131,12 @@ class BreakoutGame(Game):
                 # ゲーム終了表示を実装
                 self._show_game_end_display()
 
-            # ゲーム再開始処理 - 両ボタン同時押し検出（応答性向上のため頻繁にチェック）
+            # ゲーム再開始処理 - 両ボタン同時押し検出
             self._handle_restart_input()
             return
 
-        # 応答性向上: ボタン入力は高頻度でチェック（10ms間隔）
-        button_input_processed = False
-        if (current_time - self._last_button_check) >= self._button_check_interval:
-            self._last_button_check = current_time
-            button_input_processed = self._handle_paddle_input_optimized()
+        # ボタン入力処理
+        button_input_processed = self._handle_paddle_input_optimized()
 
         # オブジェクト位置変化検出 - 要件6.1, 6.2
         objects_moved = self._move_objects_optimized()
@@ -192,9 +161,6 @@ class BreakoutGame(Game):
         ):
             self.refresh()
             self._force_full_refresh = False
-
-        # パフォーマンス監視（50FPS安定動作確認）
-        self._monitor_performance()
 
     def _handle_paddle_input_optimized(self):
         """最適化されたパドル操作の入力処理（応答性向上）"""
@@ -456,28 +422,8 @@ class BreakoutGame(Game):
         # 画面更新
         self.matrix.show()
 
-    def _monitor_performance(self):
-        """パフォーマンス監視 - 50FPS安定動作確認"""
-        self._frame_count += 1
-        current_time = time.monotonic()
-
-        # 1秒ごとにFPSを計算・表示
-        if (current_time - self._fps_check_time) >= 1.0:
-            self._current_fps = self._frame_count
-            # デバッグ用: FPS情報をコンソールに出力（本番では削除可能）
-            if self._current_fps < 45:  # 50FPSの90%を下回る場合に警告
-                print(f"Performance Warning: FPS = {self._current_fps}")
-
-            # カウンターリセット
-            self._frame_count = 0
-            self._fps_check_time = current_time
-
     def finalize(self):
         """ゲーム終了処理"""
-        # パフォーマンス統計の最終出力
-        if hasattr(self, "_current_fps"):
-            print(f"Final FPS: {self._current_fps}")
-
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
         self.matrix.show()
