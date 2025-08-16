@@ -28,15 +28,7 @@ class BreakoutGame(Game):
                 self.x += 1
 
         def get_positions(self):
-            """パドルの3ドットの座標リストを取得"""
-            return [
-                (self.x - 1, self.y),  # 左ドット
-                (self.x, self.y),  # 中央ドット
-                (self.x + 1, self.y),  # 右ドット
-            ]
-
-        def get_positions_fast(self):
-            """最適化されたパドル座標取得（メモリ効率向上）"""
+            """パドルの3ドットの座標を取得（最適化版）"""
             # タプルを直接返すことでリスト作成のオーバーヘッドを削減
             return ((self.x - 1, self.y), (self.x, self.y), (self.x + 1, self.y))
 
@@ -59,13 +51,7 @@ class BreakoutGame(Game):
             self.speed = 0.125  # 基本速度
 
         def update(self):
-            """ボールの位置を更新"""
-            self.x += self.vx
-            self.y += self.vy
-
-        def update_fast(self):
-            """最適化されたボール位置更新（インライン計算）"""
-            # 直接計算でメソッド呼び出しオーバーヘッドを削減
+            """ボール位置更新"""
             self.x += self.vx
             self.y += self.vy
 
@@ -210,24 +196,6 @@ class BreakoutGame(Game):
         # パフォーマンス監視（50FPS安定動作確認）
         self._monitor_performance()
 
-        # メモリ使用量最適化の実行
-        if self._frame_count % 100 == 0:  # 100フレームごとに最適化チェック
-            self._optimize_memory_usage()
-
-    def _handle_paddle_input(self):
-        """パドル操作の入力処理（デバウンス処理統合）"""
-        # ボタン状態を更新（デバウンス処理）
-        self.btn_a.update()
-        self.btn_b.update()
-
-        # ボタンA押下でパドル左移動（画面端制限あり）
-        if self.btn_a.fell:
-            self.paddle.move_left()
-
-        # ボタンB押下でパドル右移動（画面端制限あり）
-        if self.btn_b.fell:
-            self.paddle.move_right()
-
     def _handle_paddle_input_optimized(self):
         """最適化されたパドル操作の入力処理（応答性向上）"""
         # ボタン状態を更新（デバウンス処理）
@@ -271,8 +239,8 @@ class BreakoutGame(Game):
 
     def _move_ball(self):
         """ボール移動処理 - フレームごとの位置更新"""
-        # 速度ベクトルによる移動計算（最適化版使用）
-        self.ball.update_fast()
+        # 速度ベクトルによる移動計算
+        self.ball.update()
 
     def _check_wall_collisions(self):
         """壁衝突判定処理"""
@@ -420,36 +388,6 @@ class BreakoutGame(Game):
         self._devices.seg.print(str(self.score))
         self._devices.seg.show()
 
-    def move_objects(self):
-        """オブジェクト位置変化検出システム - 要件6.1, 6.2"""
-        objects_moved = False
-
-        # 前回の画面上の位置を保存（ピクセル単位での変化検出用）
-        prev_paddle_x = self.paddle.x
-        prev_ball_pixel_x = int(round(self.ball.x))
-        prev_ball_pixel_y = int(round(self.ball.y))
-
-        # 入力処理 - パドル操作
-        self._handle_paddle_input()
-
-        # パドル位置変化チェック
-        if self.paddle.x != prev_paddle_x:
-            objects_moved = True
-
-        # 物理演算 - ボール移動処理
-        self._move_ball()
-
-        # ボールの画面上のピクセル位置変化チェック（float座標ではなくピクセル位置で判定）
-        current_ball_pixel_x = int(round(self.ball.x))
-        current_ball_pixel_y = int(round(self.ball.y))
-        if (
-            current_ball_pixel_x != prev_ball_pixel_x
-            or current_ball_pixel_y != prev_ball_pixel_y
-        ):
-            objects_moved = True
-
-        return objects_moved
-
     def _move_objects_optimized(self):
         """最適化されたオブジェクト位置変化検出システム"""
         objects_moved = False
@@ -499,9 +437,9 @@ class BreakoutGame(Game):
                 self.matrix[block.x, block.y] = led_red
 
         # パドル描画（緑色3ドット）- 要件1.5
-        # 最適化: キャッシュされた位置を使用またはfast版を使用
+        # 最適化: キャッシュされた位置を使用
         if self._paddle_positions_cache is None or self._last_paddle_x != self.paddle.x:
-            self._paddle_positions_cache = self.paddle.get_positions_fast()
+            self._paddle_positions_cache = self.paddle.get_positions()
             self._last_paddle_x = self.paddle.x
 
         led_green = self.matrix.LED_GREEN  # 定数の事前取得
@@ -533,20 +471,6 @@ class BreakoutGame(Game):
             # カウンターリセット
             self._frame_count = 0
             self._fps_check_time = current_time
-
-    def _optimize_memory_usage(self):
-        """メモリ使用量最適化"""
-        # 現在の実装では以下の最適化を実施:
-        # 1. リスト内包表記の削減
-        # 2. 事前計算値のキャッシュ
-        # 3. 不要なオブジェクト生成の回避
-        # 4. 早期終了による計算量削減
-
-        # 将来的な最適化案:
-        # - 破壊されたブロックのインデックス管理
-        # - 静的配列の使用
-        # - ガベージコレクション制御
-        pass
 
     def finalize(self):
         """ゲーム終了処理"""
