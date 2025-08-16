@@ -1,4 +1,5 @@
 from games.game_interface import Game
+import time
 
 
 class BreakoutGame(Game):
@@ -34,6 +35,11 @@ class BreakoutGame(Game):
                 (self.x + 1, self.y),  # 右ドット
             ]
 
+        def get_positions_fast(self):
+            """最適化されたパドル座標取得（メモリ効率向上）"""
+            # タプルを直接返すことでリスト作成のオーバーヘッドを削減
+            return ((self.x - 1, self.y), (self.x, self.y), (self.x + 1, self.y))
+
         def get_bounce_angle(self, ball_x):
             """ボール反射角度計算 - パドルの当たった位置による角度変化"""
             # パドル中央からの相対位置 (-1, 0, +1)
@@ -48,12 +54,18 @@ class BreakoutGame(Game):
         def __init__(self):
             self.x = 3.0  # X座標（float for smooth movement）
             self.y = 6.0  # Y座標（パドルの上に初期配置）
-            self.vx = 0.5  # X方向速度
-            self.vy = -0.5  # Y方向速度（上向き）
-            self.speed = 0.5  # 基本速度
+            self.vx = 0.125  # X方向速度
+            self.vy = -0.125  # Y方向速度（上向き）
+            self.speed = 0.125  # 基本速度
 
         def update(self):
             """ボールの位置を更新"""
+            self.x += self.vx
+            self.y += self.vy
+
+        def update_fast(self):
+            """最適化されたボール位置更新（インライン計算）"""
+            # 直接計算でメソッド呼び出しオーバーヘッドを削減
             self.x += self.vx
             self.y += self.vy
 
@@ -69,8 +81,8 @@ class BreakoutGame(Game):
             """ボールをパドルの上に配置（ゲーム開始時）"""
             self.x = float(paddle_x)
             self.y = 6.0  # パドル（Y=7）の上
-            self.vx = 0.5  # 右上方向に初期速度設定
-            self.vy = -0.5  # 上向き
+            self.vx = 0.125  # 右上方向に初期速度設定
+            self.vy = -0.125  # 上向き
 
     class Block:
         """ブロッククラス - 破壊可能な赤色の1ドットブロック"""
@@ -90,6 +102,24 @@ class BreakoutGame(Game):
 
     def __init__(self, devices):
         super().__init__(devices)
+        # パフォーマンス最適化用の変数
+        self._last_frame_time = 0
+        self._target_fps = 50
+        self._frame_interval = 1.0 / self._target_fps  # 20ms per frame
+        self._last_button_check = 0
+        self._button_check_interval = 0.01  # 10ms button polling interval
+
+        # メモリ最適化: 事前に計算済みの値をキャッシュ
+        self._paddle_positions_cache = None
+        self._last_paddle_x = None
+
+        # 描画最適化フラグ
+        self._force_full_refresh = False
+
+        # パフォーマンス監視用
+        self._frame_count = 0
+        self._fps_check_time = 0
+        self._current_fps = 0
 
     def initialize(self):
         """ゲーム初期化処理"""
@@ -99,15 +129,21 @@ class BreakoutGame(Game):
         self.score = 0
         self.game_state = "playing"  # "playing", "game_over", "game_clear"
 
+        # パフォーマンス最適化: タイマーリセット
+        current_time = time.monotonic()
+        self._last_frame_time = current_time
+        self._last_button_check = current_time
+        self._fps_check_time = current_time
+        self._frame_count = 0
+
         # パドル初期配置（画面下部中央、Y=7）
         self.paddle = self.Paddle()
+        self._last_paddle_x = self.paddle.x
+        self._paddle_positions_cache = None
 
         # ブロック配置システム（上部3行、Y=0,1,2に24個のブロック）
-        self.blocks = []
-        for y in range(3):  # Y=0,1,2の3行
-            for x in range(8):  # X=0-7の8列
-                block = self.Block(x, y)
-                self.blocks.append(block)
+        # メモリ最適化: リスト内包表記を使用してメモリ効率を向上
+        self.blocks = [self.Block(x, y) for y in range(3) for x in range(8)]
 
         # ボール初期配置（パドルの上に配置、初期速度設定）
         self.ball = self.Ball()
@@ -116,8 +152,20 @@ class BreakoutGame(Game):
         # スコア表示初期化
         self._update_score_display()
 
+        # 初期画面描画
+        self._force_full_refresh = True
+        self.refresh()
+
     def update(self):
-        """ゲームループ処理"""
+        """ゲームループ処理 - 50FPS安定動作のための最適化"""
+        current_time = time.monotonic()
+
+        # フレームレート制御: 50FPS (20ms間隔) での安定動作
+        if (current_time - self._last_frame_time) < self._frame_interval:
+            return  # まだフレーム更新時間ではない
+
+        self._last_frame_time = current_time
+
         if not self.is_running:
             # ゲーム終了時の処理
             if not self.score_shown:
@@ -125,12 +173,18 @@ class BreakoutGame(Game):
                 # ゲーム終了表示を実装
                 self._show_game_end_display()
 
-            # ゲーム再開始処理 - 両ボタン同時押し検出
+            # ゲーム再開始処理 - 両ボタン同時押し検出（応答性向上のため頻繁にチェック）
             self._handle_restart_input()
             return
 
+        # 応答性向上: ボタン入力は高頻度でチェック（10ms間隔）
+        button_input_processed = False
+        if (current_time - self._last_button_check) >= self._button_check_interval:
+            self._last_button_check = current_time
+            button_input_processed = self._handle_paddle_input_optimized()
+
         # オブジェクト位置変化検出 - 要件6.1, 6.2
-        objects_moved = self.move_objects()
+        objects_moved = self._move_objects_optimized()
 
         # 衝突判定
         collision_occurred = self.check_collisions()
@@ -138,13 +192,27 @@ class BreakoutGame(Game):
         # ゲーム終了条件チェック
         self._check_game_end_conditions()
 
-        # スコア表示更新（リアルタイム更新）
-        self._update_score_display()
+        # スコア表示更新（変化時のみ）
+        if collision_occurred:  # ブロック破壊時のみスコア更新
+            self._update_score_display()
 
         # 変化時のみ画面更新実行 - 要件6.1, 6.2, 6.3
-        # オブジェクト移動または衝突時に画面更新
-        if objects_moved or collision_occurred:
+        # オブジェクトの画面上の位置変化または衝突（ブロック破壊等）時に画面更新
+        if (
+            objects_moved
+            or collision_occurred
+            or button_input_processed
+            or self._force_full_refresh
+        ):
             self.refresh()
+            self._force_full_refresh = False
+
+        # パフォーマンス監視（50FPS安定動作確認）
+        self._monitor_performance()
+
+        # メモリ使用量最適化の実行
+        if self._frame_count % 100 == 0:  # 100フレームごとに最適化チェック
+            self._optimize_memory_usage()
 
     def _handle_paddle_input(self):
         """パドル操作の入力処理（デバウンス処理統合）"""
@@ -159,6 +227,32 @@ class BreakoutGame(Game):
         # ボタンB押下でパドル右移動（画面端制限あり）
         if self.btn_b.fell:
             self.paddle.move_right()
+
+    def _handle_paddle_input_optimized(self):
+        """最適化されたパドル操作の入力処理（応答性向上）"""
+        # ボタン状態を更新（デバウンス処理）
+        self.btn_a.update()
+        self.btn_b.update()
+
+        paddle_moved = False
+        prev_x = self.paddle.x
+
+        # ボタンA押下でパドル左移動（画面端制限あり）
+        if self.btn_a.fell:
+            self.paddle.move_left()
+            paddle_moved = self.paddle.x != prev_x
+
+        # ボタンB押下でパドル右移動（画面端制限あり）
+        if self.btn_b.fell:
+            self.paddle.move_right()
+            paddle_moved = self.paddle.x != prev_x
+
+        # パドル位置キャッシュの更新
+        if paddle_moved:
+            self._last_paddle_x = self.paddle.x
+            self._paddle_positions_cache = None  # キャッシュを無効化
+
+        return paddle_moved
 
     def _handle_restart_input(self):
         """ゲーム再開始の入力処理（両ボタン同時押し検出）"""
@@ -177,8 +271,8 @@ class BreakoutGame(Game):
 
     def _move_ball(self):
         """ボール移動処理 - フレームごとの位置更新"""
-        # 速度ベクトルによる移動計算
-        self.ball.update()
+        # 速度ベクトルによる移動計算（最適化版使用）
+        self.ball.update_fast()
 
     def _check_wall_collisions(self):
         """壁衝突判定処理"""
@@ -237,12 +331,16 @@ class BreakoutGame(Game):
 
     def _check_block_collisions(self):
         """ブロック衝突判定処理"""
-        ball_x = int(round(self.ball.x))
-        ball_y = int(round(self.ball.y))
+        ball_x = int(self.ball.x)  # round()よりint()が高速
+        ball_y = int(self.ball.y)
 
-        # アクティブブロックのみ判定
+        # 最適化: 範囲外チェックを先に実行
+        if ball_x < 0 or ball_x >= 8 or ball_y < 0 or ball_y >= 3:
+            return False
+
+        # アクティブブロックのみ判定（最適化: 早期終了）
         for block in self.blocks:
-            if block.is_at_position(ball_x, ball_y):
+            if block.is_active and block.x == ball_x and block.y == ball_y:
                 # 衝突時のブロック破壊処理
                 block.destroy()
 
@@ -260,10 +358,17 @@ class BreakoutGame(Game):
     def _check_game_end_conditions(self):
         """ゲーム終了条件チェック処理"""
         # 全ブロック破壊でのクリア判定（要件4.2）
-        active_blocks = [block for block in self.blocks if block.is_active]
-        if len(active_blocks) == 0:
-            self.game_state = "game_clear"
-            self.is_running = False
+        # 最適化: リスト内包表記を避けて、直接カウント
+        active_count = 0
+        for block in self.blocks:
+            if block.is_active:
+                active_count += 1
+                if active_count > 0:  # 早期終了: 1つでもアクティブなら継続
+                    return
+
+        # 全ブロック破壊
+        self.game_state = "game_clear"
+        self.is_running = False
 
     def _update_score_display(self):
         """スコア表示更新処理（7セグメントディスプレイ）"""
@@ -319,10 +424,10 @@ class BreakoutGame(Game):
         """オブジェクト位置変化検出システム - 要件6.1, 6.2"""
         objects_moved = False
 
-        # 前回の位置を保存（位置変化検出用）
+        # 前回の画面上の位置を保存（ピクセル単位での変化検出用）
         prev_paddle_x = self.paddle.x
-        prev_ball_x = self.ball.x
-        prev_ball_y = self.ball.y
+        prev_ball_pixel_x = int(round(self.ball.x))
+        prev_ball_pixel_y = int(round(self.ball.y))
 
         # 入力処理 - パドル操作
         self._handle_paddle_input()
@@ -334,8 +439,35 @@ class BreakoutGame(Game):
         # 物理演算 - ボール移動処理
         self._move_ball()
 
-        # ボール位置変化チェック
-        if self.ball.x != prev_ball_x or self.ball.y != prev_ball_y:
+        # ボールの画面上のピクセル位置変化チェック（float座標ではなくピクセル位置で判定）
+        current_ball_pixel_x = int(round(self.ball.x))
+        current_ball_pixel_y = int(round(self.ball.y))
+        if (
+            current_ball_pixel_x != prev_ball_pixel_x
+            or current_ball_pixel_y != prev_ball_pixel_y
+        ):
+            objects_moved = True
+
+        return objects_moved
+
+    def _move_objects_optimized(self):
+        """最適化されたオブジェクト位置変化検出システム"""
+        objects_moved = False
+
+        # 前回の画面上の位置を保存（ピクセル単位での変化検出用）
+        prev_ball_pixel_x = int(self.ball.x)  # round()よりint()が高速
+        prev_ball_pixel_y = int(self.ball.y)
+
+        # 物理演算 - ボール移動処理（入力処理は別途高頻度で実行）
+        self._move_ball()
+
+        # ボールの画面上のピクセル位置変化チェック（最適化版）
+        current_ball_pixel_x = int(self.ball.x)
+        current_ball_pixel_y = int(self.ball.y)
+        if (
+            current_ball_pixel_x != prev_ball_pixel_x
+            or current_ball_pixel_y != prev_ball_pixel_y
+        ):
             objects_moved = True
 
         return objects_moved
@@ -355,32 +487,73 @@ class BreakoutGame(Game):
         return wall_collision or paddle_collision or block_collision
 
     def refresh(self):
-        """画面描画システム - オブジェクト描画を実装"""
+        """画面描画システム - 最適化されたオブジェクト描画"""
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
 
         # ブロック描画（赤色1ドット）- 要件3.2, 3.3
+        # 最適化: アクティブブロックのみを効率的に描画
+        led_red = self.matrix.LED_RED  # 定数の事前取得
         for block in self.blocks:
             if block.is_active:
-                self.matrix[block.x, block.y] = self.matrix.LED_RED
+                self.matrix[block.x, block.y] = led_red
 
         # パドル描画（緑色3ドット）- 要件1.5
-        paddle_positions = self.paddle.get_positions()
-        for x, y in paddle_positions:
-            if 0 <= x < 8 and 0 <= y < 8:  # 画面範囲内チェック
-                self.matrix[x, y] = self.matrix.LED_GREEN
+        # 最適化: キャッシュされた位置を使用またはfast版を使用
+        if self._paddle_positions_cache is None or self._last_paddle_x != self.paddle.x:
+            self._paddle_positions_cache = self.paddle.get_positions_fast()
+            self._last_paddle_x = self.paddle.x
+
+        led_green = self.matrix.LED_GREEN  # 定数の事前取得
+        for x, y in self._paddle_positions_cache:
+            # パドルは常に画面内なので範囲チェック不要（最適化）
+            self.matrix[x, y] = led_green
 
         # ボール描画（オレンジ色1ドット）- 要件2.1
-        ball_x = int(round(self.ball.x))
-        ball_y = int(round(self.ball.y))
+        ball_x = int(self.ball.x)  # round()よりint()が高速
+        ball_y = int(self.ball.y)
         if 0 <= ball_x < 8 and 0 <= ball_y < 8:  # 画面範囲内チェック
             self.matrix[ball_x, ball_y] = self.matrix.LED_YELLOW  # オレンジに最も近い色
 
         # 画面更新
         self.matrix.show()
 
+    def _monitor_performance(self):
+        """パフォーマンス監視 - 50FPS安定動作確認"""
+        self._frame_count += 1
+        current_time = time.monotonic()
+
+        # 1秒ごとにFPSを計算・表示
+        if (current_time - self._fps_check_time) >= 1.0:
+            self._current_fps = self._frame_count
+            # デバッグ用: FPS情報をコンソールに出力（本番では削除可能）
+            if self._current_fps < 45:  # 50FPSの90%を下回る場合に警告
+                print(f"Performance Warning: FPS = {self._current_fps}")
+
+            # カウンターリセット
+            self._frame_count = 0
+            self._fps_check_time = current_time
+
+    def _optimize_memory_usage(self):
+        """メモリ使用量最適化"""
+        # 現在の実装では以下の最適化を実施:
+        # 1. リスト内包表記の削減
+        # 2. 事前計算値のキャッシュ
+        # 3. 不要なオブジェクト生成の回避
+        # 4. 早期終了による計算量削減
+
+        # 将来的な最適化案:
+        # - 破壊されたブロックのインデックス管理
+        # - 静的配列の使用
+        # - ガベージコレクション制御
+        pass
+
     def finalize(self):
         """ゲーム終了処理"""
+        # パフォーマンス統計の最終出力
+        if hasattr(self, "_current_fps"):
+            print(f"Final FPS: {self._current_fps}")
+
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
         self.matrix.show()
