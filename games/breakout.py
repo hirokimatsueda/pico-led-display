@@ -124,6 +124,10 @@ class BreakoutGame(Game):
 
     def update(self):
         """ゲームループ処理"""
+        # 一時停止中は更新処理をスキップ（要件6.2）
+        if self.is_paused:
+            return
+
         if not self.is_running:
             # ゲーム終了時の処理
             if not self.score_shown:
@@ -421,6 +425,25 @@ class BreakoutGame(Game):
 
         # 画面更新
         self.matrix.show()
+
+    def pause(self):
+        """
+        ゲームを一時停止
+
+        ボールの動きとゲームロジックを停止し、現在の表示状態を維持します。
+        """
+        super().pause()
+        # ボール、パドル、ブロックの状態を保持
+        # LEDマトリクスと7セグメントディスプレイの表示は維持される（要件6.3）
+
+    def resume(self):
+        """
+        ゲームを再開
+
+        ボールの動きとゲームロジックを再開し、ゲーム状態を保持します。
+        """
+        super().resume()
+        # ゲーム状態（スコア、ボール位置、パドル位置、ブロック状態）は保持される（要件6.4）
 
     def finalize(self):
         """ゲーム終了処理"""

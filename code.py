@@ -4,6 +4,7 @@ import board
 import rotaryio
 
 from games.device_manager import DeviceManager
+from games.game_selector import GameSelector
 
 from games.bouncing_ball import BouncingBallGame
 from games.falling_dot import FallingDotGame
@@ -28,26 +29,18 @@ def main():
     # ゲーム選択のためのロータリーエンコーダー初期化
     encoder = rotaryio.IncrementalEncoder(board.GP10, board.GP11)
 
-    # 選択されたゲームのインスタンスを生成
-    game = GAME_LIST[GAME_INDEX](devices)
+    # GameSelectorを初期化
+    game_selector = GameSelector(devices, encoder, GAME_LIST)
+    game_selector.current_game_index = GAME_INDEX  # 初期ゲームを設定
+    game_selector.initialize()
 
-    # ゲームの初期化処理（画面や内部状態のリセット等）
-    game.initialize()
     try:
-        last_position = encoder.position
-
         while True:
-            # ロータリーエンコーダーの位置をチェック
-            current_position = encoder.position
-            if current_position != last_position:
-                print(f"Encoder position: {current_position}")
-                last_position = current_position
-
             # ループ開始時刻を記録（フレームレート制御用）
             start_time = time.monotonic()
 
-            # ゲームの状態更新・描画
-            game.update()
+            # GameSelectorの更新処理（通常モードと選択モードの両方を処理）
+            game_selector.update()
 
             # フレームレート維持のための待機時間計算
             elapsed = time.monotonic() - start_time
@@ -58,7 +51,8 @@ def main():
         pass
     finally:
         # ゲーム終了時の後処理（画面クリア等）
-        game.finalize()
+        if game_selector.current_game:
+            game_selector.current_game.finalize()
 
 
 if __name__ == "__main__":

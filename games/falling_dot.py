@@ -88,6 +88,10 @@ class FallingDotGame(Game):
         self._devices.seg.show()
 
     def update(self):
+        # 一時停止中は更新処理をスキップ（要件6.2）
+        if self.is_paused:
+            return
+
         m = self.matrix
 
         if not self.is_running:
@@ -187,6 +191,31 @@ class FallingDotGame(Game):
         for y in range(self.matrix_height):
             m[0, y] = m.LED_RED
             m[self.matrix_width - 1, y] = m.LED_RED
+
+    def pause(self):
+        """
+        ゲームを一時停止
+
+        ドットの落下とプレイヤーの動きを停止し、現在の表示状態を維持します。
+        """
+        super().pause()
+        # ドットの落下タイマーを保存して、再開時に継続できるようにする
+        if hasattr(self, "last_drop_time"):
+            self._pause_time = time.monotonic()
+        # LEDマトリクスと7セグメントディスプレイの表示は維持される（要件6.3）
+
+    def resume(self):
+        """
+        ゲームを再開
+
+        ドットの落下とプレイヤーの動きを再開し、ゲーム状態を保持します。
+        """
+        super().resume()
+        # 一時停止時間を考慮してタイマーを調整（要件6.4）
+        if hasattr(self, "_pause_time") and hasattr(self, "last_drop_time"):
+            pause_duration = time.monotonic() - self._pause_time
+            self.last_drop_time += pause_duration
+            delattr(self, "_pause_time")
 
     def finalize(self):
         self.matrix.fill(self.matrix.LED_OFF)
