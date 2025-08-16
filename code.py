@@ -3,12 +3,13 @@ from games.device_manager import DeviceManager
 
 from games.bouncing_ball import BouncingBallGame
 from games.falling_dot import FallingDotGame
+from games.breakout import BreakoutGame
 
 FPS = 50  # フレームレート
 
 # ゲーム切り替え用変数
-GAME_LIST = [BouncingBallGame, FallingDotGame]
-GAME_INDEX = 1
+GAME_LIST = [BouncingBallGame, FallingDotGame, BreakoutGame]
+GAME_INDEX = 2
 
 
 def main():

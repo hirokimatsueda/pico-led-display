@@ -106,7 +106,25 @@ class FallingDotGame(Game):
                 self.initialize()
             return
 
-        # オブジェクトの位置更新があったかどうか
+        # オブジェクトの位置更新
+        obj_location_changed = self.move_objects()
+
+        # 衝突判定（表示中のドットのみ）
+        if self.dot and self.dot.is_visible:
+            for dx in range(2):
+                for dy in range(2):
+                    px = self.player_x + dx
+                    py = self.player_y + dy
+                    if px == self.dot.x and py == self.dot.y:
+                        self.is_running = False
+
+        # オブジェクトの位置が変わった場合のみ表示更新
+        if obj_location_changed:
+            self.refresh()
+
+    def move_objects(self) -> bool:
+        """オブジェクトの位置を更新し、必要ならば表示を更新する"""
+
         obj_location_changed = False
 
         # プレイヤー操作
@@ -131,34 +149,31 @@ class FallingDotGame(Game):
                 self.spawn_dot()
             obj_location_changed = True
 
-        # 衝突判定（表示中のドットのみ）
+        # 移動したオブジェクトがあったかどうか返却する
+        return obj_location_changed
+
+    def refresh(self):
+        """画面を更新してドットとプレイヤーを表示"""
+
+        m = self.matrix
+
+        # 画面をクリア
+        m.fill(m.LED_OFF)
+
+        # ドット表示
         if self.dot and self.dot.is_visible:
-            for dx in range(2):
-                for dy in range(2):
-                    px = self.player_x + dx
-                    py = self.player_y + dy
-                    if px == self.dot.x and py == self.dot.y:
-                        self.is_running = False
+            m[self.dot.x, self.dot.y] = m.LED_YELLOW
 
-        # オブジェクトの位置が変わった場合のみ表示更新
-        if obj_location_changed:
-            # 画面をクリア
-            m.fill(m.LED_OFF)
+        # プレイヤー表示（2x2緑）
+        for dx in range(2):
+            for dy in range(2):
+                px = self.player_x + dx
+                py = self.player_y + dy
+                if 0 <= px < self.matrix_width and 0 <= py < self.matrix_height:
+                    m[px, py] = m.LED_GREEN
 
-            # ドット表示
-            if self.dot and self.dot.is_visible:
-                m[self.dot.x, self.dot.y] = m.LED_YELLOW
-
-            # プレイヤー表示（2x2緑）
-            for dx in range(2):
-                for dy in range(2):
-                    px = self.player_x + dx
-                    py = self.player_y + dy
-                    if 0 <= px < self.matrix_width and 0 <= py < self.matrix_height:
-                        m[px, py] = m.LED_GREEN
-
-            # 表示更新
-            m.show()
+        # 表示更新
+        m.show()
 
     def show_error(self):
         """ゲームオーバー時に赤枠を表示"""
