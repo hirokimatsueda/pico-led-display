@@ -53,33 +53,3 @@ class DisplayManager:
                 self.seg[i] = char
         except Exception as e:
             print(f"Error displaying error message: {e}")
-
-    def save_current_state(self):
-        """現在の表示状態を保存"""
-        try:
-            # 実際の実装では表示状態の保存が困難なため、
-            # 簡単な実装として空のリストを保存
-            self.saved_state = []
-        except Exception as e:
-            print(f"Error saving display state: {e}")
-            self.saved_state = None
-
-    def restore_state(self):
-        """保存された表示状態を復元"""
-        try:
-            if self.saved_state is not None:
-                # 実際の復元は困難なため、クリアしてゲーム側での再描画を期待
-                self.seg.fill(False)
-                self.saved_state = None
-            else:
-                self.seg.fill(False)
-        except Exception as e:
-            print(f"Error restoring display state: {e}")
-            self._safe_clear()
-
-    def _safe_clear(self):
-        """安全なディスプレイクリア"""
-        try:
-            self.seg.fill(False)
-        except Exception as e:
-            print(f"Error clearing display: {e}")

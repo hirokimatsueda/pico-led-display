@@ -67,8 +67,6 @@ class GameSelector:
         - 通常モード: ゲームの更新とエンコーダー監視
         - 選択モード: エンコーダーとボタンの処理
         """
-        # エンコーダーの健全性をチェック
-        self.encoder_manager.check_health()
 
         if self.mode == GameSelectorMode.NORMAL_GAME_MODE:
             self._update_normal_mode()
@@ -138,8 +136,7 @@ class GameSelector:
             self.game_manager.get_current_game_index()
         )
 
-        # ディスプレイの状態を保存し、選択表示に切り替え
-        self.display_manager.save_current_state()
+        # 選択表示に切り替え
         self._update_selection_display()
 
     def exit_selection_mode(self):
@@ -151,9 +148,6 @@ class GameSelector:
         """
         # モードを変更
         self.mode = GameSelectorMode.NORMAL_GAME_MODE
-
-        # ディスプレイの状態を復元
-        self.display_manager.restore_state()
 
         # ゲームを再開
         self.game_manager.resume_current_game()
