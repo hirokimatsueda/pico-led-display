@@ -4,7 +4,7 @@ import board
 import rotaryio
 
 from games.device_manager import DeviceManager
-from games.game_selector import GameSelector
+from games.selector import GameSelector
 
 from games.bouncing_ball import BouncingBallGame
 from games.falling_dot import FallingDotGame
@@ -31,8 +31,11 @@ def main():
 
     # GameSelectorを初期化
     game_selector = GameSelector(devices, encoder, GAME_LIST)
-    game_selector.current_game_index = GAME_INDEX  # 初期ゲームを設定
     game_selector.initialize()
+
+    # 初期ゲームを設定（必要に応じて）
+    if GAME_INDEX != 0:
+        game_selector.game_manager.change_game(GAME_INDEX)
 
     try:
         while True:
@@ -51,8 +54,8 @@ def main():
         pass
     finally:
         # ゲーム終了時の後処理（画面クリア等）
-        if game_selector.current_game:
-            game_selector.current_game.finalize()
+        if game_selector.game_manager.current_game:
+            game_selector.game_manager.current_game.finalize()
 
 
 if __name__ == "__main__":

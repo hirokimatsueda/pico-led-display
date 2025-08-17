@@ -1,7 +1,7 @@
-from games.encoder_manager import EncoderManager
-from games.game_manager import GameManager
-from games.display_manager import DisplayManager
-from games.selection_state import SelectionState
+from .encoder_manager import EncoderManager
+from .game_manager import GameManager
+from .display_manager import DisplayManager
+from .selection_state import SelectionState
 
 
 class GameSelectorMode:
