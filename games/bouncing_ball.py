@@ -52,6 +52,10 @@ class BouncingBallGame(Game):
         self.btn_b_toggle = True
 
     def update(self):
+        # 一時停止中は更新処理をスキップ（要件6.2）
+        if self.is_paused:
+            return
+
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
 
@@ -84,6 +88,26 @@ class BouncingBallGame(Game):
 
         # 表示更新
         self.matrix.show()
+
+    def pause(self):
+        """
+        ゲームを一時停止
+
+        ボールの動きを停止し、現在の表示状態を維持します。
+        """
+        super().pause()
+        # ボールの動きを停止するため、現在の状態を保存
+        # LEDマトリクスの表示は維持される（要件6.3）
+
+    def resume(self):
+        """
+        ゲームを再開
+
+        ボールの動きを再開し、ゲーム状態を保持します。
+        """
+        super().resume()
+        # ゲーム状態は保持される（要件6.4）
+        # ボールの位置や速度などの状態は変更されない
 
     def finalize(self):
         self.matrix.fill(self.matrix.LED_OFF)
