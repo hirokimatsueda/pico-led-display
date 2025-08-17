@@ -12,22 +12,22 @@ class BreakoutGame(Game):
         """パドルクラス - プレイヤーが操作する緑色の3ドットパドル"""
 
         def __init__(self):
-            self.x = 3  # 中央位置（画面幅8の中央）
+            self.x = 3  # 中央位置 (画面幅8の中央)
             self.y = 7  # 最下行に固定
-            self.width = 3  # パドル幅（3ドット）
+            self.width = 3  # パドル幅 (3ドット)
 
         def move_left(self):
-            """パドルを左に1ピクセル移動（画面端制限あり）"""
-            if self.x > 1:  # 左端制限（3ドットパドルの左端が画面内に収まる）
+            """パドルを左に1ピクセル移動 (画面端制限あり)"""
+            if self.x > 1:  # 左端制限 (3ドットパドルの左端が画面内に収まる)
                 self.x -= 1
 
         def move_right(self):
-            """パドルを右に1ピクセル移動（画面端制限あり）"""
-            if self.x < 6:  # 右端制限（3ドットパドルの右端が画面内に収まる）
+            """パドルを右に1ピクセル移動 (画面端制限あり)"""
+            if self.x < 6:  # 右端制限 (3ドットパドルの右端が画面内に収まる)
                 self.x += 1
 
         def get_positions(self):
-            """パドルの3ドットの座標を取得（最適化版）"""
+            """パドルの3ドットの座標を取得 (最適化版)"""
             # タプルを直接返すことでリスト作成のオーバーヘッドを削減
             return ((self.x - 1, self.y), (self.x, self.y), (self.x + 1, self.y))
 
@@ -43,10 +43,10 @@ class BreakoutGame(Game):
         """ボールクラス - オレンジ色の1ドットボール"""
 
         def __init__(self):
-            self.x = 3.0  # X座標（float for smooth movement）
-            self.y = 6.0  # Y座標（パドルの上に初期配置）
+            self.x = 3.0  # X座標 (float for smooth movement)
+            self.y = 6.0  # Y座標 (パドルの上に初期配置)
             self.vx = 0.125  # X方向速度
-            self.vy = -0.125  # Y方向速度（上向き）
+            self.vy = -0.125  # Y方向速度 (上向き)
             self.speed = 0.125  # 基本速度
 
         def update(self):
@@ -55,17 +55,17 @@ class BreakoutGame(Game):
             self.y += self.vy
 
         def bounce_horizontal(self):
-            """水平方向の反射（左右の壁衝突時）"""
+            """水平方向の反射 (左右の壁衝突時)"""
             self.vx = -self.vx
 
         def bounce_vertical(self):
-            """垂直方向の反射（上壁、パドル、ブロック衝突時）"""
+            """垂直方向の反射 (上壁、パドル、ブロック衝突時)"""
             self.vy = -self.vy
 
         def reset_position(self, paddle_x):
-            """ボールをパドルの上に配置（ゲーム開始時）"""
+            """ボールをパドルの上に配置 (ゲーム開始時)"""
             self.x = float(paddle_x)
-            self.y = 6.0  # パドル（Y=7）の上
+            self.y = 6.0  # パドル (Y=7) の上
             self.vx = 0.125  # 右上方向に初期速度設定
             self.vy = -0.125  # 上向き
 
@@ -75,10 +75,10 @@ class BreakoutGame(Game):
         def __init__(self, x, y):
             self.x = x  # X座標
             self.y = y  # Y座標
-            self.is_active = True  # ブロックの状態（True=存在、False=破壊済み）
+            self.is_active = True  # ブロックの状態 (True=存在、False=破壊済み)
 
         def destroy(self):
-            """ブロックを破壊（非アクティブ化）"""
+            """ブロックを破壊 (非アクティブ化)"""
             self.is_active = False
 
         def is_at_position(self, x, y):
@@ -102,16 +102,16 @@ class BreakoutGame(Game):
         self.score = 0
         self.game_state = "playing"  # "playing", "game_over", "game_clear"
 
-        # パドル初期配置（画面下部中央、Y=7）
+        # パドル初期配置 (画面下部中央、Y=7)
         self.paddle = self.Paddle()
         self._last_paddle_x = self.paddle.x
         self._paddle_positions_cache = None
 
-        # ブロック配置システム（上部3行、Y=0,1,2に24個のブロック）
+        # ブロック配置システム (上部3行、Y=0,1,2に24個のブロック)
         # メモリ最適化: リスト内包表記を使用してメモリ効率を向上
         self.blocks = [self.Block(x, y) for y in range(3) for x in range(8)]
 
-        # ボール初期配置（パドルの上に配置、初期速度設定）
+        # ボール初期配置 (パドルの上に配置、初期速度設定)
         self.ball = self.Ball()
         self.ball.reset_position(self.paddle.x)
 
@@ -124,7 +124,7 @@ class BreakoutGame(Game):
 
     def update(self):
         """ゲームループ処理"""
-        # 一時停止中は更新処理をスキップ（要件6.2）
+        # 一時停止中は更新処理をスキップ
         if self.is_paused:
             return
 
@@ -142,7 +142,7 @@ class BreakoutGame(Game):
         # ボタン入力処理
         button_input_processed = self._handle_paddle_input_optimized()
 
-        # オブジェクト位置変化検出 - 要件6.1, 6.2
+        # オブジェクト位置変化検出
         objects_moved = self._move_objects_optimized()
 
         # 衝突判定
@@ -151,12 +151,12 @@ class BreakoutGame(Game):
         # ゲーム終了条件チェック
         self._check_game_end_conditions()
 
-        # スコア表示更新（変化時のみ）
+        # スコア表示更新 (変化時のみ)
         if collision_occurred:  # ブロック破壊時のみスコア更新
             self._update_score_display()
 
-        # 変化時のみ画面更新実行 - 要件6.1, 6.2, 6.3
-        # オブジェクトの画面上の位置変化または衝突（ブロック破壊等）時に画面更新
+        # 変化時のみ画面更新実行
+        # オブジェクトの画面上の位置変化または衝突 (ブロック破壊等) 時に画面更新
         if (
             objects_moved
             or collision_occurred
@@ -167,20 +167,20 @@ class BreakoutGame(Game):
             self._force_full_refresh = False
 
     def _handle_paddle_input_optimized(self):
-        """最適化されたパドル操作の入力処理（応答性向上）"""
-        # ボタン状態を更新（デバウンス処理）
+        """最適化されたパドル操作の入力処理 (応答性向上)"""
+        # ボタン状態を更新 (デバウンス処理)
         self.btn_a.update()
         self.btn_b.update()
 
         paddle_moved = False
         prev_x = self.paddle.x
 
-        # ボタンA押下でパドル左移動（画面端制限あり）
+        # ボタンA押下でパドル左移動 (画面端制限あり)
         if self.btn_a.fell:
             self.paddle.move_left()
             paddle_moved = self.paddle.x != prev_x
 
-        # ボタンB押下でパドル右移動（画面端制限あり）
+        # ボタンB押下でパドル右移動 (画面端制限あり)
         if self.btn_b.fell:
             self.paddle.move_right()
             paddle_moved = self.paddle.x != prev_x
@@ -193,12 +193,12 @@ class BreakoutGame(Game):
         return paddle_moved
 
     def _handle_restart_input(self):
-        """ゲーム再開始の入力処理（両ボタン同時押し検出）"""
+        """ゲーム再開始の入力処理 (両ボタン同時押し検出)"""
         # ボタン状態を更新
         self.btn_a.update()
         self.btn_b.update()
 
-        # 両ボタンが同時に押された場合（同じフレームでfellが検出）
+        # 両ボタンが同時に押された場合 (同じフレームでfellが検出)
         if self.btn_a.fell and self.btn_b.fell:
             self._reset_game_state()
 
@@ -242,7 +242,7 @@ class BreakoutGame(Game):
 
     def _check_paddle_collision(self):
         """パドル衝突判定処理"""
-        # ボールがパドルの高さ（Y=7）に到達し、下向きに移動している場合
+        # ボールがパドルの高さ (Y=7) に到達し、下向きに移動している場合
         if (
             self.ball.y >= 7
             and self.ball.vy > 0
@@ -255,7 +255,7 @@ class BreakoutGame(Game):
             # 反射位置による角度変化計算
             angle_factor = self.paddle.get_bounce_angle(self.ball.x)
 
-            # 速度ベクトルの更新（X方向の速度を角度に応じて調整）
+            # 速度ベクトルの更新 (X方向の速度を角度に応じて調整)
             self.ball.vx = self.ball.speed * angle_factor
             # Y方向は上向きに固定
             self.ball.vy = -abs(self.ball.vy)
@@ -276,7 +276,7 @@ class BreakoutGame(Game):
         if ball_x < 0 or ball_x >= 8 or ball_y < 0 or ball_y >= 3:
             return False
 
-        # アクティブブロックのみ判定（最適化: 早期終了）
+        # アクティブブロックのみ判定 (最適化: 早期終了)
         for block in self.blocks:
             if block.is_active and block.x == ball_x and block.y == ball_y:
                 # 衝突時のブロック破壊処理
@@ -285,7 +285,7 @@ class BreakoutGame(Game):
                 # ボールの垂直方向の速度が反転
                 self.ball.bounce_vertical()
 
-                # スコア増加（要件5.2: ブロックが破壊されたときスコアが1増加）
+                # スコア増加
                 self.score += 1
 
                 # 1フレームで複数ブロック破壊を防ぐため、最初の衝突で処理終了
@@ -295,7 +295,7 @@ class BreakoutGame(Game):
 
     def _check_game_end_conditions(self):
         """ゲーム終了条件チェック処理"""
-        # 全ブロック破壊でのクリア判定（要件4.2）
+        # 全ブロック破壊でのクリア判定
         # 最適化: リスト内包表記を避けて、直接カウント
         active_count = 0
         for block in self.blocks:
@@ -309,14 +309,14 @@ class BreakoutGame(Game):
         self.is_running = False
 
     def _update_score_display(self):
-        """スコア表示更新処理（7セグメントディスプレイ）"""
+        """スコア表示更新処理 (7セグメントディスプレイ)"""
         # 7セグメントディスプレイに破壊したブロック数を表示
         self._devices.seg.fill(0)  # ディスプレイをクリア
         self._devices.seg.print(str(self.score))  # スコアを文字列として表示
         self._devices.seg.show()  # 表示を更新
 
     def _show_game_end_display(self):
-        """ゲーム終了表示処理（要件4.4, 5.4）"""
+        """ゲーム終了表示処理"""
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
 
@@ -331,7 +331,7 @@ class BreakoutGame(Game):
             # ゲームオーバー時は赤色で画面全体を点滅させる
             self._show_game_over_pattern()
 
-        # 最終スコア表示（7セグメントディスプレイ）
+        # 最終スコア表示 (7セグメントディスプレイ)
         self._show_final_score()
 
         # 画面を更新
@@ -339,14 +339,14 @@ class BreakoutGame(Game):
 
     def _show_clear_pattern(self):
         """ゲームクリア時の画面表示パターン"""
-        # 緑色で画面全体を点灯（クリア表示）
+        # 緑色で画面全体を点灯 (クリア表示)
         for y in range(8):
             for x in range(8):
                 self.matrix.pixel(x, y, self.matrix.LED_GREEN)
 
     def _show_game_over_pattern(self):
         """ゲームオーバー時の画面表示パターン"""
-        # 赤色で画面全体を点灯（ゲームオーバー表示）
+        # 赤色で画面全体を点灯 (ゲームオーバー表示)
         for y in range(8):
             for x in range(8):
                 self.matrix.pixel(x, y, self.matrix.LED_RED)
@@ -362,14 +362,14 @@ class BreakoutGame(Game):
         """最適化されたオブジェクト位置変化検出システム"""
         objects_moved = False
 
-        # 前回の画面上の位置を保存（ピクセル単位での変化検出用）
+        # 前回の画面上の位置を保存 (ピクセル単位での変化検出用)
         prev_ball_pixel_x = int(self.ball.x)  # round()よりint()が高速
         prev_ball_pixel_y = int(self.ball.y)
 
-        # 物理演算 - ボール移動処理（入力処理は別途高頻度で実行）
+        # 物理演算 - ボール移動処理 (入力処理は別途高頻度で実行)
         self._move_ball()
 
-        # ボールの画面上のピクセル位置変化チェック（最適化版）
+        # ボールの画面上のピクセル位置変化チェック (最適化版)
         current_ball_pixel_x = int(self.ball.x)
         current_ball_pixel_y = int(self.ball.y)
         if (
@@ -399,14 +399,14 @@ class BreakoutGame(Game):
         # 画面をクリア
         self.matrix.fill(self.matrix.LED_OFF)
 
-        # ブロック描画（赤色1ドット）- 要件3.2, 3.3
+        # ブロック描画 (赤色1ドット)
         # 最適化: アクティブブロックのみを効率的に描画
         led_red = self.matrix.LED_RED  # 定数の事前取得
         for block in self.blocks:
             if block.is_active:
                 self.matrix[block.x, block.y] = led_red
 
-        # パドル描画（緑色3ドット）- 要件1.5
+        # パドル描画 (緑色3ドット)
         # 最適化: キャッシュされた位置を使用
         if self._paddle_positions_cache is None or self._last_paddle_x != self.paddle.x:
             self._paddle_positions_cache = self.paddle.get_positions()
@@ -414,10 +414,10 @@ class BreakoutGame(Game):
 
         led_green = self.matrix.LED_GREEN  # 定数の事前取得
         for x, y in self._paddle_positions_cache:
-            # パドルは常に画面内なので範囲チェック不要（最適化）
+            # パドルは常に画面内なので範囲チェック不要 (最適化)
             self.matrix[x, y] = led_green
 
-        # ボール描画（オレンジ色1ドット）- 要件2.1
+        # ボール描画 (オレンジ色1ドット)
         ball_x = int(self.ball.x)  # round()よりint()が高速
         ball_y = int(self.ball.y)
         if 0 <= ball_x < 8 and 0 <= ball_y < 8:  # 画面範囲内チェック
@@ -434,7 +434,7 @@ class BreakoutGame(Game):
         """
         super().pause()
         # ボール、パドル、ブロックの状態を保持
-        # LEDマトリクスと7セグメントディスプレイの表示は維持される（要件6.3）
+        # LEDマトリクスと7セグメントディスプレイの表示は維持される
 
     def resume(self):
         """
@@ -443,7 +443,7 @@ class BreakoutGame(Game):
         ボールの動きとゲームロジックを再開し、ゲーム状態を保持します。
         """
         super().resume()
-        # ゲーム状態（スコア、ボール位置、パドル位置、ブロック状態）は保持される（要件6.4）
+        # ゲーム状態 (スコア、ボール位置、パドル位置、ブロック状態) は保持される
 
     def finalize(self):
         """ゲーム終了処理"""

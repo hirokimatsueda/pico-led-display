@@ -23,7 +23,7 @@ def main():
     このスクリプトは、ゲームの初期化、更新、描画を行い、フレームレートを制御します。
     """
 
-    # デバイス（LED, 7セグ, ボタン等）を初期化
+    # デバイス (LED, 7セグ, ボタン等) を初期化
     devices = DeviceManager()
 
     # ゲーム選択のためのロータリーエンコーダー初期化
@@ -33,16 +33,16 @@ def main():
     game_selector = GameSelector(devices, encoder, GAME_LIST)
     game_selector.initialize()
 
-    # 初期ゲームを設定（必要に応じて）
+    # 初期ゲームを設定 (必要に応じて)
     if GAME_INDEX != 0:
         game_selector.game_manager.change_game(GAME_INDEX)
 
     try:
         while True:
-            # ループ開始時刻を記録（フレームレート制御用）
+            # ループ開始時刻を記録 (フレームレート制御用)
             start_time = time.monotonic()
 
-            # GameSelectorの更新処理（通常モードと選択モードの両方を処理）
+            # GameSelectorの更新処理 (通常モードと選択モードの両方を処理)
             game_selector.update()
 
             # フレームレート維持のための待機時間計算
@@ -53,7 +53,7 @@ def main():
         # シリアルモニターからCtrl+C等で終了した場合の処理
         pass
     finally:
-        # ゲーム終了時の後処理（画面クリア等）
+        # ゲーム終了時の後処理 (画面クリア等)
         if game_selector.game_manager.current_game:
             game_selector.game_manager.current_game.finalize()
 
