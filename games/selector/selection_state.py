@@ -35,7 +35,3 @@ class SelectionState:
     def get_selected_number(self):
         """選択されているゲーム番号を取得（1ベース）"""
         return self.selected_index + 1
-
-    def is_valid_index(self, index):
-        """インデックスが有効かチェック"""
-        return 0 <= index < self.game_count and self.game_count > 0

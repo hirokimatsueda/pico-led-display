@@ -1,6 +1,5 @@
 from .encoder_manager import EncoderManager
 from .game_manager import GameManager
-from .display_manager import DisplayManager
 from .selection_state import SelectionState
 
 
@@ -69,27 +68,19 @@ class GameSelector:
         """
 
         if self.mode == GameSelectorMode.NORMAL_GAME_MODE:
-            self._update_normal_mode()
+            # 現在のゲームを更新
+            self.game_manager.update_current_game()
+
+            # エンコーダーの回転を監視して選択モードに移行
+            rotation = self.encoder_manager.check_rotation()
+            if rotation != 0:
+                self.enter_selection_mode()
         elif self.mode == GameSelectorMode.GAME_SELECTION_MODE:
-            self._update_selection_mode()
+            # エンコーダーの回転処理
+            self._handle_encoder_rotation()
 
-    def _update_normal_mode(self):
-        """通常モードの更新処理"""
-        # 現在のゲームを更新
-        self.game_manager.update_current_game()
-
-        # エンコーダーの回転を監視
-        rotation = self.encoder_manager.check_rotation()
-        if rotation != 0:
-            self.enter_selection_mode()
-
-    def _update_selection_mode(self):
-        """選択モードの更新処理"""
-        # エンコーダーの回転処理
-        self._handle_encoder_rotation()
-
-        # ボタン処理
-        self._handle_button_input()
+            # ボタン処理
+            self._handle_button_input()
 
     def _handle_encoder_rotation(self):
         """エンコーダーの回転によるゲーム選択処理"""
