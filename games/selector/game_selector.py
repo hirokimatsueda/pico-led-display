@@ -40,7 +40,7 @@ class GameSelector:
         # 各種マネージャーの初期化
         self.encoder_manager = EncoderManager(encoder)
         self.game_manager = GameManager(devices, game_list)
-        self.display_manager = DisplayManager(devices.seg)
+        self.seg = devices.seg
         self.selection_state = SelectionState(len(game_list))
 
     def initialize(self):
@@ -165,11 +165,6 @@ class GameSelector:
         """
         selected_index = self.selection_state.get_selected_index()
 
-        if not self.selection_state.is_valid_index(selected_index):
-            print(f"Error: Invalid game index {selected_index}")
-            self.display_manager.show_error("Idx")
-            return
-
         # ゲームを変更
         if self.game_manager.change_game(selected_index):
             # 成功した場合は選択モードを終了
@@ -180,7 +175,6 @@ class GameSelector:
                 self.game_manager.get_current_game_index()
             )
             self._update_selection_display()
-            self.display_manager.show_error("Err")
 
     def cancel_selection(self):
         """
@@ -210,4 +204,19 @@ class GameSelector:
         ゲーム番号を表示する（1桁目と4桁目に「-」、2~3桁目にゲーム番号）
         """
         game_number = self.selection_state.get_selected_number()
-        self.display_manager.show_game_selection(game_number)
+
+        self.seg.fill(False)
+
+        # --XX--形式で表示
+        self.seg[0] = "-"
+
+        if game_number < 10:
+            self.seg[1] = "0"
+            self.seg[2] = str(game_number)
+        else:
+            tens = game_number // 10
+            ones = game_number % 10
+            self.seg[1] = str(tens)
+            self.seg[2] = str(ones)
+
+        self.seg[3] = "-"
