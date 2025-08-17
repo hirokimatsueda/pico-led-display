@@ -44,7 +44,7 @@ class FallingDot:
 class FallingDotGame(Game):
     """
     上からランダムな位置にオレンジ色のドットが落ちてきて、
-    プレイヤー（2x2緑）を左右ボタンで操作して避けるゲーム。
+    プレイヤー (2x2緑) を左右ボタンで操作して避けるゲーム。
     衝突したら停止。
     """
 
@@ -58,13 +58,13 @@ class FallingDotGame(Game):
         # ゲーム終了時スコア表示済みフラグ
         self.score_shown = False
 
-        # プレイヤー初期位置（下中央）
+        # プレイヤー初期位置 (下中央)
         self.player_x = self.matrix_width // 2 - 1
         self.player_y = self.matrix_height - 2
 
-        # 落下ドット（1個のみ）
+        # 落下ドット (1個のみ)
         self.dot = None
-        # ドット落下速度（秒）
+        # ドット落下速度 (秒)
         self.dot_speed = 0.5
         # 避けたドット数
         self.dot_count = 0
@@ -74,9 +74,9 @@ class FallingDotGame(Game):
         self.last_drop_time = time.monotonic()
 
     def spawn_dot(self):
-        # 新しいドットを生成（1個のみ）
+        # 新しいドットを生成 (1個のみ)
         self.dot = FallingDot(random.randint(0, self.matrix_width - 1), 0)
-        # 新規生成ごとに速度を1.1で割る（加速）
+        # 新規生成ごとに速度を1.1で割る (加速)
         self.dot_speed /= 1.1
         # ゲーム開始直後はカウントしない
         if self.dot_count is not None:
@@ -88,7 +88,7 @@ class FallingDotGame(Game):
         self._devices.seg.show()
 
     def update(self):
-        # 一時停止中は更新処理をスキップ（要件6.2）
+        # 一時停止中は更新処理をスキップ
         if self.is_paused:
             return
 
@@ -99,7 +99,7 @@ class FallingDotGame(Game):
                 self.score_shown = True
 
                 print(f"Game over. score = {self.dot_count - 1}\n")
-                # ゲームが終了している場合は赤枠を表示（1回だけm.show）
+                # ゲームが終了している場合は赤枠を表示 (1回だけm.show)
                 self.show_error()
                 m.show()
 
@@ -113,7 +113,7 @@ class FallingDotGame(Game):
         # オブジェクトの位置更新
         obj_location_changed = self.move_objects()
 
-        # 衝突判定（表示中のドットのみ）
+        # 衝突判定 (表示中のドットのみ)
         if self.dot and self.dot.is_visible:
             for dx in range(2):
                 for dy in range(2):
@@ -168,7 +168,7 @@ class FallingDotGame(Game):
         if self.dot and self.dot.is_visible:
             m[self.dot.x, self.dot.y] = m.LED_YELLOW
 
-        # プレイヤー表示（2x2緑）
+        # プレイヤー表示 (2x2緑)
         for dx in range(2):
             for dy in range(2):
                 px = self.player_x + dx
@@ -202,7 +202,7 @@ class FallingDotGame(Game):
         # ドットの落下タイマーを保存して、再開時に継続できるようにする
         if hasattr(self, "last_drop_time"):
             self._pause_time = time.monotonic()
-        # LEDマトリクスと7セグメントディスプレイの表示は維持される（要件6.3）
+        # LEDマトリクスと7セグメントディスプレイの表示は維持される
 
     def resume(self):
         """
@@ -211,7 +211,7 @@ class FallingDotGame(Game):
         ドットの落下とプレイヤーの動きを再開し、ゲーム状態を保持します。
         """
         super().resume()
-        # 一時停止時間を考慮してタイマーを調整（要件6.4）
+        # 一時停止時間を考慮してタイマーを調整
         if hasattr(self, "_pause_time") and hasattr(self, "last_drop_time"):
             pause_duration = time.monotonic() - self._pause_time
             self.last_drop_time += pause_duration

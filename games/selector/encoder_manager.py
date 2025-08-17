@@ -32,7 +32,7 @@ class EncoderManager:
         エンコーダーの回転をチェック
 
         Returns:
-            int: 回転量（0=回転なし、正=時計回り、負=反時計回り）
+            int: 回転量 (0=回転なし、正=時計回り、負=反時計回り)
         """
         current_position = self.read_position()
         rotation = current_position - self.last_position

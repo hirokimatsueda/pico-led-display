@@ -14,12 +14,12 @@ class SelectionState:
         self.selected_index = 0
 
     def select_next(self):
-        """次のゲームを選択（循環）"""
+        """次のゲームを選択 (循環)"""
         if self.game_count > 0:
             self.selected_index = (self.selected_index + 1) % self.game_count
 
     def select_previous(self):
-        """前のゲームを選択（循環）"""
+        """前のゲームを選択 (循環)"""
         if self.game_count > 0:
             self.selected_index = (self.selected_index - 1) % self.game_count
 
@@ -33,5 +33,5 @@ class SelectionState:
         return self.selected_index
 
     def get_selected_number(self):
-        """選択されているゲーム番号を取得（1ベース）"""
+        """選択されているゲーム番号を取得 (1ベース)"""
         return self.selected_index + 1
