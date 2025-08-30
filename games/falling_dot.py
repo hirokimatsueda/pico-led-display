@@ -134,12 +134,12 @@ class FallingDotGame(Game):
         # プレイヤー操作
         self.btn_a.update()
         if self.btn_a.fell:
-            self.player_x = max(0, self.player_x - 1)
+            self.player_x = min(self.matrix_width - 2, self.player_x + 1)
             obj_location_changed = True
 
         self.btn_b.update()
         if self.btn_b.fell:
-            self.player_x = min(self.matrix_width - 2, self.player_x + 1)
+            self.player_x = max(0, self.player_x - 1)
             obj_location_changed = True
 
         # dot_speed秒ごとにドット落下
