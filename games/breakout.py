@@ -18,13 +18,13 @@ class BreakoutGame(Game):
 
         def move_left(self):
             """パドルを左に1ピクセル移動 (画面端制限あり)"""
-            if self.x > 1:  # 左端制限 (3ドットパドルの左端が画面内に収まる)
-                self.x -= 1
+            if self.x < 6:  # 左端制限 (3ドットパドルの左端が画面内に収まる)
+                self.x += 1
 
         def move_right(self):
             """パドルを右に1ピクセル移動 (画面端制限あり)"""
-            if self.x < 6:  # 右端制限 (3ドットパドルの右端が画面内に収まる)
-                self.x += 1
+            if self.x > 1:  # 右端制限 (3ドットパドルの右端が画面内に収まる)
+                self.x -= 1
 
         def get_positions(self):
             """パドルの3ドットの座標を取得 (最適化版)"""

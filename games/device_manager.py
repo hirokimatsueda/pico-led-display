@@ -22,12 +22,12 @@ class DeviceManager:
         self._seg = Seg7x4(self._i2c_1)
 
         # ボタン初期化
-        self._pin_a = digitalio.DigitalInOut(board.GP0)
+        self._pin_a = digitalio.DigitalInOut(board.GP18)
         self._pin_a.direction = digitalio.Direction.INPUT
         self._pin_a.pull = digitalio.Pull.UP
         self._btn_a = Debouncer(self._pin_a)
 
-        self._pin_b = digitalio.DigitalInOut(board.GP1)
+        self._pin_b = digitalio.DigitalInOut(board.GP19)
         self._pin_b.direction = digitalio.Direction.INPUT
         self._pin_b.pull = digitalio.Pull.UP
         self._btn_b = Debouncer(self._pin_b)

@@ -79,10 +79,10 @@ class BouncingBallGame(Game):
         if self.btn_b.fell:
             self.btn_b_toggle = not self.btn_b_toggle
 
-        self.matrix[0, 0] = (
+        self.matrix[7, 0] = (
             self.matrix.LED_GREEN if self.btn_a_toggle else self.matrix.LED_OFF
         )
-        self.matrix[7, 0] = (
+        self.matrix[0, 0] = (
             self.matrix.LED_GREEN if self.btn_b_toggle else self.matrix.LED_OFF
         )
 
