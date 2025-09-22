@@ -9,11 +9,12 @@ from games.selector import GameSelector
 from games.bouncing_ball import BouncingBallGame
 from games.falling_dot import FallingDotGame
 from games.breakout import BreakoutGame
+from games.bomb_defuse import BombDefuseGame
 
 FPS = 50  # フレームレート
 
 # ゲーム切り替え用変数
-GAME_LIST = [BouncingBallGame, FallingDotGame, BreakoutGame]
+GAME_LIST = [BouncingBallGame, FallingDotGame, BreakoutGame, BombDefuseGame]
 GAME_INDEX = 2
 
 
