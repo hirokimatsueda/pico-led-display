@@ -496,38 +496,6 @@ class BombDefuseGame(Game):
 
         print(f"Wrong button! Game Over at stage {self.current_stage}")
 
-    def _reset_game(self):
-        """
-        ゲームをリセットして最初から開始する
-
-        左右同時押しで呼び出される。
-        現在の状態に関係なく、ゲームを初期状態に戻す。
-        """
-        print("Game reset - Starting from stage 1")
-
-        # ゲーム状態を初期化
-        self.state = GameState.PLAYING
-        self.current_stage = 1
-        self.max_stage_reached = 1
-
-        # ボタン状態をリセット
-        self.button_pressed = False
-
-        # 入力待機時間をリセット
-        self.input_delay_start_time = 0.0
-
-        # エフェクトタイマーをリセット
-        self.effect_timer = 0.0
-
-        # 一時停止状態を解除
-        self.is_paused = False
-
-        # タイマーを初期状態にリセット
-        self.timer.reset(self.base_time)
-
-        # 新しいステージを開始
-        self._start_new_stage()
-
     def update(self):
         """
         メインゲームループ処理
@@ -624,7 +592,7 @@ class BombDefuseGame(Game):
         if current_button_a and current_button_b:
             if not (self.last_button_state_a and self.last_button_state_b):
                 # 同時押しが検出された瞬間にリセット実行
-                self._reset_game()
+                self.initialize()
 
         # 前回の状態を更新
         self.last_button_state_a = current_button_a
