@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+CLAUDE.md
+
+# CircuitPython VS Code拡張が python.analysis.extraPaths を自動追記するため個人環境ごとに追跡しない
+# 雛形は .vscode/settings.json.example を参照
+.vscode/settings.json
