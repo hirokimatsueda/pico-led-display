@@ -36,9 +36,10 @@ class JumpRunnerGame(Game):
     加えて画面上部には、地上/空中の障害物とは完全に独立したタイミングで
     洞窟の天井のようなギザギザした「壁」がスクロールしてくる (赤、複数列)。
     列ごとに深さがランダムなので、大ジャンプ中にどこかの列の高さへ
-    到達すると頭をぶつける。TALLが画面内にいる間だけは壁が出ない
-    (逃げ場を確保するため)。これにより、地上/空中の障害物が無いタイミングでも
-    「大ジャンプで無駄に高く跳ばない」という制約が常に効くようになる。
+    到達すると頭をぶつける。TALLが画面内にいる間は、TALLがいる列だけ
+    壁に動的に穴が開き逃げ場になる (壁全体が消えるわけではない)。
+    これにより、地上/空中の障害物が無いタイミングでも「大ジャンプで無駄に
+    高く跳ばない」という制約が常に効くようになる。
 
     衝突したら停止。
     """
@@ -70,6 +71,13 @@ class JumpRunnerGame(Game):
     # 壁パターンの横幅 (列数)。列ごとに深さ(何マス下まで垂れ下がるか)を
     # ランダムに変えることで、洞窟の天井のようなギザギザした形にする。
     WALL_PATTERN_WIDTH = 4
+
+    # TALLの逃げ場として壁に穴を開ける範囲 (TALLの列を中心に前後何列まで)。
+    # 大ジャンプは開始から着地まで数ティックかかるため、TALLがちょうど
+    # プレイヤーの列にいる瞬間だけ穴を開けても、その直前・直後のティックで
+    # 別の壁区画に引っかかってしまうことがある。前後に余裕を持たせることで、
+    # 大ジャンプの上昇〜下降の間ずっと安全な区間を確保する。
+    TALL_GAP_MARGIN = 2
 
     def __init__(self, devices):
         super().__init__(devices)
@@ -121,9 +129,8 @@ class JumpRunnerGame(Game):
         if r < self.TALL_OBSTACLE_PROBABILITY:
             kind = Obstacle.TALL
             rows = self.tall_rows
-            # TALLの間は大ジャンプの逃げ場(画面上部)を必ず空けておく
-            self.wall_x = None
-            self.wall_pattern = None
+            # 壁自体は消さない。TALLがいる列だけ動的に穴を開ける
+            # (is_tall_gap_at参照) ことで、壁がいきなり消える不自然さを避ける。
         elif r < self.TALL_OBSTACLE_PROBABILITY + (
             1.0 - self.TALL_OBSTACLE_PROBABILITY
         ) / 2:
@@ -236,10 +243,25 @@ class JumpRunnerGame(Game):
 
         self.move_wall()
 
+    def is_tall_gap_at(self, x: int) -> bool:
+        """
+        列xに大ジャンプの逃げ場となる穴を開けるべきかどうか。
+
+        TALL障害物が今いる列を中心に前後TALL_GAP_MARGIN列ぶん、壁があっても
+        その部分だけ無視する。大ジャンプは上昇〜下降に数ティックかかるため、
+        TALLがちょうどプレイヤーの列にいる瞬間だけ穴を開けても不十分で、
+        前後にも余裕を持たせる必要がある。壁パターン全体を消すのではなく
+        穴だけ動的に開けることで、TALLが来るたびに壁がまるごと消える
+        不自然さも無くしている。
+        """
+        return (
+            self.obstacle is not None
+            and self.obstacle.kind == Obstacle.TALL
+            and abs(self.obstacle.x - x) <= self.TALL_GAP_MARGIN
+        )
+
     def move_wall(self):
         # 画面上部の壁は地上/空中の障害物とは独立したタイミングで出現・移動する。
-        # ただしTALL障害物が画面内にいる間は、大ジャンプの逃げ場を潰さないよう
-        # 新規出現させない (既存の壁はspawn_obstacle側で即座に消される)。
         if self.wall_x is not None:
             self.wall_x -= 1
             if self.wall_x < 0:
@@ -247,21 +269,25 @@ class JumpRunnerGame(Game):
                 self.wall_pattern = None
             else:
                 # wall_pattern[j] は列 (wall_x - j) にいる。プレイヤーの列と
-                # 重なっている区画があれば、その深さぶんだけ判定する。
+                # 重なっている区画があれば、その深さぶんだけ判定する
+                # (TALLの逃げ場になっている列は除く)。
                 for j, depth in enumerate(self.wall_pattern):
-                    if self.wall_x - j == self.PLAYER_X:
-                        self.check_collision(self.PLAYER_X, self.ceiling_rows[:depth])
+                    col = self.wall_x - j
+                    if col == self.PLAYER_X:
+                        if not self.is_tall_gap_at(col):
+                            self.check_collision(
+                                self.PLAYER_X, self.ceiling_rows[:depth]
+                            )
                         break
-        elif not (self.obstacle and self.obstacle.kind == Obstacle.TALL):
-            if random.random() < self.WALL_SPAWN_CHANCE:
-                # 画面右端のさらに外側からスタートすることで、他の障害物と同様に
-                # 1列ずつ画面に入ってくるように見せる (先頭からいきなり
-                # WALL_PATTERN_WIDTH列ぶん出現すると唐突に見えるため)。
-                self.wall_x = self.matrix_width - 1 + (self.WALL_PATTERN_WIDTH - 1)
-                self.wall_pattern = [
-                    random.randint(1, len(self.ceiling_rows))
-                    for _ in range(self.WALL_PATTERN_WIDTH)
-                ]
+        elif random.random() < self.WALL_SPAWN_CHANCE:
+            # 画面右端のさらに外側からスタートすることで、他の障害物と同様に
+            # 1列ずつ画面に入ってくるように見せる (先頭からいきなり
+            # WALL_PATTERN_WIDTH列ぶん出現すると唐突に見えるため)。
+            self.wall_x = self.matrix_width - 1 + (self.WALL_PATTERN_WIDTH - 1)
+            self.wall_pattern = [
+                random.randint(1, len(self.ceiling_rows))
+                for _ in range(self.WALL_PATTERN_WIDTH)
+            ]
 
     def get_player_pixels(self):
         """現在のプレイヤーが占有するピクセル座標のリストを返す"""
@@ -298,10 +324,11 @@ class JumpRunnerGame(Game):
                 m[self.obstacle.x, y] = color
 
         if self.wall_x is not None:
-            # 洞窟の天井のように、列ごとに深さの違う「鍾乳石」を描画する
+            # 洞窟の天井のように、列ごとに深さの違う「鍾乳石」を描画する。
+            # TALLの逃げ場になっている列は穴として空けておく。
             for j, depth in enumerate(self.wall_pattern):
                 x = self.wall_x - j
-                if 0 <= x < self.matrix_width:
+                if 0 <= x < self.matrix_width and not self.is_tall_gap_at(x):
                     for y in self.ceiling_rows[:depth]:
                         m[x, y] = m.LED_RED
 
