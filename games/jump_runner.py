@@ -102,6 +102,9 @@ class JumpRunnerGame(Game):
             range(self.head_y - self.NORMAL_JUMP_MAX_OFFSET + 1, self.matrix_height)
         )
 
+        # ゲームオーバー時のリセット判定 (両ボタン同時押し検出用)
+        self._both_pressed_prev = False
+
         # ジャンプ状態
         self.is_jumping = False
         self.jump_start_time = 0.0
@@ -165,11 +168,18 @@ class JumpRunnerGame(Game):
                 print(f"Game over. score = {self.score}\n")
                 self.show_game_over()
 
-            # 以降は何も表示しないが、両ボタン同時押しで再スタート可能
+            # 以降は何も表示しないが、両ボタン同時押しで再スタート可能。
+            # fell同士 (押した瞬間) の一致で判定すると、両ボタンの押下が
+            # 同一フレームに揃わない限りリセットされずタイミングがシビアに
+            # なるため、代わりに「両方押されている」状態への遷移で判定する。
             self.btn_a.update()
             self.btn_b.update()
-            if self.btn_a.fell and self.btn_b.fell:
+            both_pressed = not self.btn_a.value and not self.btn_b.value
+            if both_pressed and not self._both_pressed_prev:
+                self._both_pressed_prev = both_pressed
                 self.initialize()
+                return
+            self._both_pressed_prev = both_pressed
             return
 
         self.handle_input()

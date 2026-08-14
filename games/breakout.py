@@ -115,6 +115,9 @@ class BreakoutGame(Game):
         self.ball = self.Ball()
         self.ball.reset_position(self.paddle.x)
 
+        # ゲームオーバー時のリセット判定 (両ボタン同時押し検出用)
+        self._both_pressed_prev = False
+
         # スコア表示初期化
         self._update_score_display()
 
@@ -193,14 +196,23 @@ class BreakoutGame(Game):
         return paddle_moved
 
     def _handle_restart_input(self):
-        """ゲーム再開始の入力処理 (両ボタン同時押し検出)"""
+        """
+        ゲーム再開始の入力処理 (両ボタン同時押し検出)
+
+        fell同士 (押した瞬間) の一致で判定すると、両ボタンの押下が
+        同一フレームに揃わない限りリセットされずタイミングがシビアに
+        なるため、代わりに「両方押されている」状態への遷移で判定する。
+        """
         # ボタン状態を更新
         self.btn_a.update()
         self.btn_b.update()
 
-        # 両ボタンが同時に押された場合 (同じフレームでfellが検出)
-        if self.btn_a.fell and self.btn_b.fell:
+        both_pressed = not self.btn_a.value and not self.btn_b.value
+        if both_pressed and not self._both_pressed_prev:
+            self._both_pressed_prev = both_pressed
             self._reset_game_state()
+            return
+        self._both_pressed_prev = both_pressed
 
     def _reset_game_state(self):
         """ゲーム状態リセット処理"""
