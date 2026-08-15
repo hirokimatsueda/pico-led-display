@@ -113,6 +113,30 @@ class BombDefuseGame(Game):
         爆弾の表示、爆発エフェクト、成功エフェクトなどの視覚表現を管理
         """
 
+        # 爆弾本体のパターン（導火線の燃え代 FUSE_TRAIL は含まない）
+        BOMB_BODY_PATTERN = [
+            (3, 2),
+            (4, 2),  # 導火線の付け根
+            (2, 3),
+            (3, 3),
+            (4, 3),
+            (5, 3),  # 爆弾本体上部
+            (2, 4),
+            (3, 4),
+            (4, 4),
+            (5, 4),  # 爆弾本体中央
+            (2, 5),
+            (3, 5),
+            (4, 5),
+            (5, 5),  # 爆弾本体下部
+            (3, 6),
+            (4, 6),  # 爆弾本体底部
+        ]
+
+        # 導火線の燃え代（未燃焼部分）。手前(爆弾に近い側)から先端の順に並べる。
+        # 残り時間の割合に応じて先端から燃え尽きて短くなっていく。
+        FUSE_TRAIL = [(4, 1), (4, 0)]
+
         def __init__(self, matrix):
             """
             VisualEffects を初期化
@@ -123,60 +147,59 @@ class BombDefuseGame(Game):
             self.matrix = matrix
             self.blink_state = False
             self.last_blink_time = 0
-            self.blink_interval = 0.5  # 点滅間隔（秒）
 
-        def show_bomb(self, warning: bool = False):
+        def show_bomb(self, remaining_fraction: float = 1.0):
             """
-            爆弾の表示（通常表示または警告表示）
+            爆弾の表示。残り時間の割合に応じて導火線が先端から燃え尽きて
+            短くなっていき、燃え尽きた後は爆弾本体ごと高速点滅させることで
+            爆発直前の緊迫感を演出する。
 
             Args:
-                warning: True の場合は警告表示（点滅）、False の場合は通常表示
+                remaining_fraction: このステージの残り時間の割合（1.0=開始直後、0.0=時間切れ直前）
 
             Requirements: 4.1, 4.4
             - LED マトリクスに爆弾の状態を表示
-            - 時間が少なくなる（3秒以下）時は警告を示すビジュアル効果を表示
+            - 残り時間が少なくなるほど導火線を短くし、燃え尽きたら爆弾全体を点滅させて警告を示す
             """
-            # 警告表示の場合は点滅制御
-            if warning:
-                current_time = time.monotonic()
-                if current_time - self.last_blink_time >= self.blink_interval:
-                    self.blink_state = not self.blink_state
-                    self.last_blink_time = current_time
+            # 残り時間の割合に応じて導火線の残り本数と点滅間隔を決定
+            # （ステージごとに制限時間が変わるため、絶対秒数ではなく割合で判定する）
+            if remaining_fraction <= 0.2:
+                visible_trail = 0  # 導火線は燃え尽きた
+                blink_interval = 0.1
+            elif remaining_fraction <= 0.5:
+                visible_trail = 1
+                blink_interval = 0.25
+            else:
+                visible_trail = len(self.FUSE_TRAIL)
+                blink_interval = 0.6
 
-                # 点滅状態がオフの場合は何も表示しない
-                if not self.blink_state:
-                    self.matrix.fill(self.matrix.LED_OFF)
-                    self.matrix.show()
-                    return
+            current_time = time.monotonic()
+            if current_time - self.last_blink_time >= blink_interval:
+                self.blink_state = not self.blink_state
+                self.last_blink_time = current_time
 
-            # 爆弾のパターンを描画（赤色で爆弾の形を表現）
-            # 中央に爆弾本体、周囲に導火線を表現
-            bomb_pattern = [
-                (3, 2),
-                (4, 2),  # 上部導火線
-                (2, 3),
-                (3, 3),
-                (4, 3),
-                (5, 3),  # 爆弾本体上部
-                (2, 4),
-                (3, 4),
-                (4, 4),
-                (5, 4),  # 爆弾本体中央
-                (2, 5),
-                (3, 5),
-                (4, 5),
-                (5, 5),  # 爆弾本体下部
-                (3, 6),
-                (4, 6),  # 爆弾本体底部
-            ]
-
-            # 画面をクリア
             self.matrix.fill(self.matrix.LED_OFF)
 
-            # 爆弾パターンを描画
-            for x, y in bomb_pattern:
+            if visible_trail == 0:
+                # 導火線が燃え尽きた後は爆弾本体ごと高速点滅させる
+                if self.blink_state:
+                    for x, y in self.BOMB_BODY_PATTERN:
+                        if 0 <= x < 8 and 0 <= y < 8:
+                            self.matrix[x, y] = self.matrix.LED_RED
+                self.matrix.show()
+                return
+
+            # 爆弾本体は常に表示
+            for x, y in self.BOMB_BODY_PATTERN:
                 if 0 <= x < 8 and 0 <= y < 8:
                     self.matrix[x, y] = self.matrix.LED_RED
+
+            # 導火線の燃え残りを描画。一番先端（火がついている場所）だけ点滅させる
+            for i in range(visible_trail):
+                x, y = self.FUSE_TRAIL[i]
+                is_tip = i == visible_trail - 1
+                if not is_tip or self.blink_state:
+                    self.matrix[x, y] = self.matrix.LED_YELLOW
 
             self.matrix.show()
 
@@ -303,6 +326,7 @@ class BombDefuseGame(Game):
         self.base_time = 10.0  # 初期制限時間（秒）
         self.min_time = 3.0  # 最小制限時間（秒）
         self.time_reduction = 0.2  # ステージごとの時間短縮（秒）
+        self.current_stage_time = self.base_time  # 現在のステージの制限時間（火花の点滅速度計算に使用）
 
         # Timer インスタンスを初期化
         self.timer = self.Timer(self.base_time)
@@ -320,9 +344,22 @@ class BombDefuseGame(Game):
         self.last_button_state_a = False
         self.last_button_state_b = False
 
-        # ボタン入力待機時間の設定
-        self.input_delay_duration = 1.0  # ゲーム開始後1秒間はボタン入力を無視
+        # ボタン入力待機時間（ワイヤーカラーヒント表示）の設定
+        # この間は正解ボタン側のワイヤーを緑、不正解側を赤で一瞬だけ表示し、
+        # ボタン入力は無視する。表示は一瞬のフラッシュにして記憶を頼りに
+        # 判断させることで緊張感を出す。ステージが進むほど表示時間を短くする。
+        self.reveal_base_time = 0.5  # ヒント表示時間の初期値（秒）
+        self.reveal_min_time = 0.15  # ヒント表示時間の最小値（秒）
+        self.reveal_reduction = 0.015  # ステージごとのヒント表示時間短縮（秒）
+        self.input_delay_duration = self.reveal_base_time
         self.input_delay_start_time = 0.0  # 入力待機開始時刻
+
+        # フェイク点滅（ひっかけ）の設定
+        # ヒント表示の前半を逆色（フェイク）にする回があり、後半は必ず正しい色を表示する。
+        # 発生確率はステージが進むほど上がる（最大 60%）ため、色の変化を最後まで見届ける必要がある。
+        self.fake_flicker_max_chance = 0.6
+        self.fake_flicker_chance_per_stage = 0.05
+        self.hint_has_fake = False
 
     def _start_new_stage(self):
         """
@@ -345,6 +382,7 @@ class BombDefuseGame(Game):
             self.min_time,
             self.base_time - (self.current_stage - 1) * self.time_reduction,
         )
+        self.current_stage_time = stage_time  # 火花の点滅速度計算（残り時間の割合）に使用
 
         # タイマーをリセットして新しい時間で開始
         self.timer.reset(stage_time)
@@ -353,7 +391,20 @@ class BombDefuseGame(Game):
         # ボタン押下状態をリセット（重複入力防止のため）
         self.button_pressed = False
 
-        # ボタン入力待機時間を開始
+        # ヒント表示時間を計算（ステージが進むほど短縮、最小値まで）
+        self.input_delay_duration = max(
+            self.reveal_min_time,
+            self.reveal_base_time - (self.current_stage - 1) * self.reveal_reduction,
+        )
+
+        # このステージでフェイク点滅を発生させるか決定（ステージが進むほど確率上昇）
+        fake_chance = min(
+            self.fake_flicker_max_chance,
+            (self.current_stage - 1) * self.fake_flicker_chance_per_stage,
+        )
+        self.hint_has_fake = random.random() < fake_chance
+
+        # ボタン入力待機時間（ヒント表示）を開始
         self.input_delay_start_time = time.monotonic()
 
         # ゲーム状態をプレイ中に設定
@@ -409,7 +460,7 @@ class BombDefuseGame(Game):
         self._devices.seg.show()
 
         # LEDマトリクスに初期爆弾表示
-        self.visual_effects.show_bomb(warning=False)
+        self.visual_effects.show_bomb(1.0)
 
         # 最初のステージを開始（タイマーもここで初期化される）
         self._start_new_stage()
@@ -641,13 +692,17 @@ class BombDefuseGame(Game):
         # 残り時間を取得（タイマーの更新も同時に行う）
         remaining_time = self.timer.update()
 
-        # 警告表示の閾値判定（3秒以下で警告）
-        warning_threshold = 3.0
-        is_warning = remaining_time <= warning_threshold
+        # 残り時間の割合を計算（ステージごとに制限時間が異なるため割合で判定する）
+        remaining_fraction = (
+            remaining_time / self.current_stage_time
+            if self.current_stage_time > 0
+            else 0.0
+        )
+        is_warning = remaining_fraction <= 0.2
 
         # LEDマトリクスに爆弾の状態を表示
-        # 警告状態の場合は点滅効果を適用
-        self.visual_effects.show_bomb(warning=is_warning)
+        # 残り時間の割合に応じて火花の点滅速度・色が変化する
+        self.visual_effects.show_bomb(remaining_fraction)
 
         # 7セグメントディスプレイに残り時間をカウントダウン表示
         # 残り時間を整数秒で表示（小数点以下切り上げで直感的な表示）
@@ -671,36 +726,46 @@ class BombDefuseGame(Game):
 
     def _show_input_delay_display(self):
         """
-        ボタン入力待機時間中の表示
+        ヒント表示（ワイヤーカラー）
 
-        LEDマトリクスに待機中であることを示す表示を行い、
-        7セグメントディスプレイに残り待機時間を表示する。
+        マトリクスを左右に分割し、Aボタン側・Bボタン側それぞれに
+        ワイヤーを表示する。正解ボタン側を緑、不正解側を赤で表示することで、
+        プレイヤーに判断材料を与える（このゲームが単なる運試しにならないようにする）。
+        この間はボタン入力を無視する。
+
+        表示時間は一瞬（数百ミリ秒）のフラッシュにしているため記憶を頼りに
+        判断する必要があり、さらにステージが進むと前半だけ逆色の「フェイク」を
+        混ぜることがある（最終的に表示される色は必ず正解を示す）。
         """
-        # 残り待機時間を計算
-        current_time = time.monotonic()
-        elapsed = current_time - self.input_delay_start_time
-        remaining_delay = max(0, self.input_delay_duration - elapsed)
+        correct_is_a = self.correct_button == "A"
+        real_left_color = self.matrix.LED_GREEN if correct_is_a else self.matrix.LED_RED
+        real_right_color = self.matrix.LED_RED if correct_is_a else self.matrix.LED_GREEN
 
-        # LEDマトリクスに待機中表示（青色で点滅）
-        current_time_ms = int(current_time * 1000)
-        blink_on = (current_time_ms // 250) % 2 == 0  # 250ms間隔で点滅
+        # フェイク発生時は表示前半だけ逆色にし、後半で正しい色に切り替える
+        show_fake = False
+        if self.hint_has_fake:
+            elapsed = time.monotonic() - self.input_delay_start_time
+            show_fake = elapsed < (self.input_delay_duration / 2)
 
-        if blink_on:
-            # 待機中パターン（青色で四角形を表示）
-            self.matrix.fill(self.matrix.LED_OFF)
-            for x in range(2, 6):
-                for y in range(2, 6):
-                    self.matrix[x, y] = self.matrix.LED_BLUE
+        if show_fake:
+            left_color = real_right_color
+            right_color = real_left_color
         else:
-            # 点滅オフ時はクリア
-            self.matrix.fill(self.matrix.LED_OFF)
+            left_color = real_left_color
+            right_color = real_right_color
 
+        self.matrix.fill(self.matrix.LED_OFF)
+        for x in range(0, 4):
+            for y in range(8):
+                self.matrix[x, y] = left_color
+        for x in range(4, 8):
+            for y in range(8):
+                self.matrix[x, y] = right_color
         self.matrix.show()
 
-        # 7セグメントディスプレイに残り待機時間を表示
-        display_delay = max(0, int(remaining_delay + 0.99))  # 切り上げ処理
+        # 7セグメントディスプレイに待機中を示す表示
         self._devices.seg.fill(0)
-        self._devices.seg.print(f"--")  # 待機中を示す表示
+        self._devices.seg.print("--")
         self._devices.seg.show()
 
     def _show_success_effect(self):
