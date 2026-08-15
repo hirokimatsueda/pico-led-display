@@ -255,11 +255,14 @@ class BreakoutGame(Game):
     def _check_paddle_collision(self):
         """パドル衝突判定処理"""
         # ボールがパドルの高さ (Y=7) に到達し、下向きに移動している場合
+        # 描画時は int() で切り捨てた列を使うため、判定も同じ列基準で行う
+        # (paddle.x + 1 の右端で ball.x が非整数のまま素通りするのを防ぐ)
+        ball_col = int(self.ball.x)
         if (
             self.ball.y >= 7
             and self.ball.vy > 0
-            and self.ball.x >= self.paddle.x - 1
-            and self.ball.x <= self.paddle.x + 1
+            and ball_col >= self.paddle.x - 1
+            and ball_col <= self.paddle.x + 1
         ):
             # 垂直方向の反射
             self.ball.bounce_vertical()
