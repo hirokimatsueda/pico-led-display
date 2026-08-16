@@ -219,11 +219,6 @@ class BreakoutGame(Game):
         # ゲーム状態を初期化してゲームを再開始
         self.initialize()
 
-    def _move_ball(self):
-        """ボール移動処理 - フレームごとの位置更新"""
-        # 速度ベクトルによる移動計算
-        self.ball.update()
-
     def _check_wall_collisions(self):
         """壁衝突判定処理"""
         collision_occurred = False
@@ -325,10 +320,7 @@ class BreakoutGame(Game):
 
     def _update_score_display(self):
         """スコア表示更新処理 (7セグメントディスプレイ)"""
-        # 7セグメントディスプレイに破壊したブロック数を表示
-        self._devices.seg.fill(0)  # ディスプレイをクリア
-        self._devices.seg.print(str(self.score))  # スコアを文字列として表示
-        self._devices.seg.show()  # 表示を更新
+        self._devices.show_text(str(self.score))
 
     def _show_game_end_display(self):
         """ゲーム終了表示処理"""
@@ -347,7 +339,7 @@ class BreakoutGame(Game):
             self._show_game_over_pattern()
 
         # 最終スコア表示 (7セグメントディスプレイ)
-        self._show_final_score()
+        self._update_score_display()
 
         # 画面を更新
         self.matrix.show()
@@ -366,13 +358,6 @@ class BreakoutGame(Game):
             for x in range(8):
                 self.matrix.pixel(x, y, self.matrix.LED_RED)
 
-    def _show_final_score(self):
-        """ゲーム終了時の最終スコア表示"""
-        # 7セグメントディスプレイに最終スコアを表示
-        self._devices.seg.fill(0)
-        self._devices.seg.print(str(self.score))
-        self._devices.seg.show()
-
     def _move_objects_optimized(self):
         """最適化されたオブジェクト位置変化検出システム"""
         objects_moved = False
@@ -382,7 +367,7 @@ class BreakoutGame(Game):
         prev_ball_pixel_y = int(self.ball.y)
 
         # 物理演算 - ボール移動処理 (入力処理は別途高頻度で実行)
-        self._move_ball()
+        self.ball.update()
 
         # ボールの画面上のピクセル位置変化チェック (最適化版)
         current_ball_pixel_x = int(self.ball.x)
@@ -467,5 +452,4 @@ class BreakoutGame(Game):
         self.matrix.show()
 
         # 7セグメントディスプレイをクリア
-        self._devices.seg.fill(0)
-        self._devices.seg.show()
+        self._devices.show_text()

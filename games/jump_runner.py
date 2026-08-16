@@ -153,9 +153,7 @@ class JumpRunnerGame(Game):
             )
 
     def update_score_display(self):
-        self._devices.seg.fill(0)
-        self._devices.seg.print(str(self.score))
-        self._devices.seg.show()
+        self._devices.show_text(str(self.score))
 
     def update(self):
         # 一時停止中は更新処理をスキップ
@@ -358,16 +356,8 @@ class JumpRunnerGame(Game):
     def show_game_over(self):
         """ゲームオーバー時に赤枠を表示"""
 
-        m = self.matrix
-
-        for x in range(self.matrix_width):
-            m[x, 0] = m.LED_RED
-            m[x, self.matrix_height - 1] = m.LED_RED
-        for y in range(self.matrix_height):
-            m[0, y] = m.LED_RED
-            m[self.matrix_width - 1, y] = m.LED_RED
-
-        m.show()
+        self._devices.show_border(self.matrix.LED_RED)
+        self.matrix.show()
 
     def pause(self):
         """
@@ -395,5 +385,4 @@ class JumpRunnerGame(Game):
     def finalize(self):
         self.matrix.fill(self.matrix.LED_OFF)
         self.matrix.show()
-        self._devices.seg.fill(0)
-        self._devices.seg.show()
+        self._devices.show_text()

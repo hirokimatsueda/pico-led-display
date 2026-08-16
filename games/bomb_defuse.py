@@ -456,8 +456,7 @@ class BombDefuseGame(Game):
         self.timer.reset(self.base_time)
 
         # 7セグメントディスプレイをクリアしてから初期化
-        self._devices.seg.fill(0)
-        self._devices.seg.show()
+        self._devices.show_text()
 
         # LEDマトリクスに初期爆弾表示
         self.visual_effects.show_bomb(1.0)
@@ -709,9 +708,7 @@ class BombDefuseGame(Game):
         display_time = max(0, int(remaining_time + 0.99))  # 切り上げ処理
 
         # 7セグメントディスプレイをクリアして時間を表示
-        self._devices.seg.fill(0)
-        self._devices.seg.print(f"{display_time:02d}")  # 2桁ゼロパディング形式で表示
-        self._devices.seg.show()
+        self._devices.show_text(f"{display_time:02d}")  # 2桁ゼロパディング形式で表示
 
         # デバッグ情報（開発時の確認用）
         if hasattr(self, "_last_display_time"):
@@ -764,9 +761,7 @@ class BombDefuseGame(Game):
         self.matrix.show()
 
         # 7セグメントディスプレイに待機中を示す表示
-        self._devices.seg.fill(0)
-        self._devices.seg.print("--")
-        self._devices.seg.show()
+        self._devices.show_text("--")
 
     def _show_success_effect(self):
         """
@@ -790,9 +785,7 @@ class BombDefuseGame(Game):
             # ステージ数を2桁で表示（例：01, 02, 03, ...）
             stage_display = self.current_stage - 1  # 完了したステージ数
 
-            self._devices.seg.fill(0)
-            self._devices.seg.print(f"{stage_display:02d}")
-            self._devices.seg.show()
+            self._devices.show_text(f"{stage_display:02d}")
         else:
             # エフェクト終了後、次のステージを開始
             self._start_new_stage()
@@ -823,9 +816,7 @@ class BombDefuseGame(Game):
             # 到達したステージ数を2桁で表示
             final_score = self.max_stage_reached
 
-            self._devices.seg.fill(0)
-            self._devices.seg.print(f"{final_score:02d}")
-            self._devices.seg.show()
+            self._devices.show_text(f"{final_score:02d}")
 
             print(f"Final Score: Stage {final_score}")
         else:
@@ -846,8 +837,7 @@ class BombDefuseGame(Game):
         self.visual_effects.clear()
 
         # 7セグメントディスプレイをクリア
-        self._devices.seg.fill(0)
-        self._devices.seg.show()
+        self._devices.show_text()
 
         # 全ての内部状態を完全にリセット
         self.state = GameState.PLAYING

@@ -51,3 +51,19 @@ class DeviceManager:
     def btn_b(self) -> Debouncer:
         """Bボタンへのアクセス"""
         return self._btn_b
+
+    def show_text(self, text: str = "") -> None:
+        """7セグメントディスプレイをクリアし、指定文字列を表示する（空文字ならクリアのみ）"""
+        self._seg.fill(0)
+        if text:
+            self._seg.print(text)
+        self._seg.show()
+
+    def show_border(self, color) -> None:
+        """LEDマトリクスの外周1ドットを指定色で描画する（show()の呼び出しは呼び出し側に委ねる）"""
+        for x in range(self._matrix.columns):
+            self._matrix[x, 0] = color
+            self._matrix[x, self._matrix.rows - 1] = color
+        for y in range(self._matrix.rows):
+            self._matrix[0, y] = color
+            self._matrix[self._matrix.columns - 1, y] = color

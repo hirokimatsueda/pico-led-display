@@ -73,6 +73,9 @@ class FallingDotGame(Game):
         # ドット落下タイマー
         self.last_drop_time = time.monotonic()
 
+        # ゲームオーバー時のリセット判定 (両ボタン同時押し検出用)
+        self._both_pressed_prev = False
+
     def spawn_dot(self):
         # 新しいドットを生成 (1個のみ)
         self.dot = FallingDot(random.randint(0, self.matrix_width - 1), 0)
@@ -83,9 +86,7 @@ class FallingDotGame(Game):
             self.dot_count += 1
 
         # 7セグメントディスプレイをクリアして得点表示
-        self._devices.seg.fill(0)  # 7セグメントディスプレイをクリア
-        self._devices.seg.print(str(self.dot_count - 1))
-        self._devices.seg.show()
+        self._devices.show_text(str(self.dot_count - 1))
 
     def update(self):
         # 一時停止中は更新処理をスキップ
@@ -103,11 +104,24 @@ class FallingDotGame(Game):
                 self.show_error()
                 m.show()
 
-            # 以降は何も表示しないが、ボタンクリックで再スタート可能
+                # 衝突した瞬間に両ボタンが押されたままだった場合、
+                # 「両方押されている状態への遷移」が即成立して意図せず
+                # 即リセットされてしまうのを防ぐため、ゲームオーバーに
+                # 入った直後は一度両方離されるまでリセット判定を無効化する。
+                self._both_pressed_prev = True
+
+            # 以降は何も表示しないが、両ボタン同時押しで再スタート可能。
+            # fell同士 (押した瞬間) の一致で判定すると、両ボタンの押下が
+            # 同一フレームに揃わない限りリセットされずタイミングがシビアに
+            # なるため、代わりに「両方押されている」状態への遷移で判定する。
             self.btn_a.update()
             self.btn_b.update()
-            if self.btn_a.fell and self.btn_b.fell:
+            both_pressed = not self.btn_a.value and not self.btn_b.value
+            if both_pressed and not self._both_pressed_prev:
+                self._both_pressed_prev = both_pressed
                 self.initialize()
+                return
+            self._both_pressed_prev = both_pressed
             return
 
         # オブジェクトの位置更新
@@ -182,15 +196,7 @@ class FallingDotGame(Game):
     def show_error(self):
         """ゲームオーバー時に赤枠を表示"""
 
-        m = self.matrix
-
-        # 外周に赤色を表示
-        for x in range(self.matrix_width):
-            m[x, 0] = m.LED_RED
-            m[x, self.matrix_height - 1] = m.LED_RED
-        for y in range(self.matrix_height):
-            m[0, y] = m.LED_RED
-            m[self.matrix_width - 1, y] = m.LED_RED
+        self._devices.show_border(self.matrix.LED_RED)
 
     def pause(self):
         """
