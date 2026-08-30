@@ -127,18 +127,29 @@ tools/wav2c.py         WAV を C 配列に変換する
 効果音は「(周波数, 長さ)」の並びによる簡易譜面で表現します。
 
 ```c
-static const sfx_step_t SFX_JUMP_STEPS[] = {SFX_SWEEP(392, 880, 100)};  /* 392->880Hz を 100ms */
-static const sfx_t SFX_JUMP = SFX_DEF(SFX_JUMP_STEPS, AUDIO_WAVE_SQUARE, 255);  /* 振幅 0..255 */
+static const sfx_step_t SFX_JUMP_STEPS[] = {
+    SFX_TONE(587, 35),        /* D5 を 35ms */
+    SFX_SWEEP(784, 1175, 75), /* G5 -> D6 へ 75ms でスイープ */
+};
+static const sfx_t SFX_JUMP = SFX_DEF(SFX_JUMP_STEPS, AUDIO_WAVE_SQUARE, 255); /* 振幅 0..255 */
 
 audio_play(&SFX_JUMP);
 ```
 
 `SFX_TONE(周波数, ms)` / `SFX_SWEEP(開始, 終了, ms)` / `SFX_REST(ms)` の 3 種類を並べます。
 波形は矩形波 / 三角波 / ノイズから選べます。同時発音数は 6 なので、鳴っている音の上に
-別の音を重ねられます。
+別の音を重ねられます (衝突音はノイズの衝撃音と下降する三角波を重ねています)。
 
 効果音データはゲーム間で共有せず、各ゲームのファイル内に置いてください
 (`src/game/jump_runner.c` の先頭が例です)。
+
+### 音づくりの方針
+
+音程は D を中心とした 4 度堆積 (D - G - C - F) から選んでいます。この手のゲームで
+定番の「長三和音の上昇アルペジオ」「完全 5 度の取得音」を避けることで、レトロな
+音色は保ったまま響きだけを独自のものにする狙いです。ジャンプ系は「刻んだ音 +
+スイープ」を共通のモチーフにして、通常ジャンプと大ジャンプが同じ仲間に聞こえる
+ようにしてあります。
 
 ### WAV を焼き込む
 

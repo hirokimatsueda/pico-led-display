@@ -61,24 +61,50 @@ typedef enum {
     OBSTACLE_TALL,
 } obstacle_kind_t;
 
-/* --- 効果音 (このゲーム専用の譜面データ) --- */
+/*
+ * --- 効果音 (このゲーム専用の譜面データ) ---
+ *
+ * 音程は D を中心とした 4 度堆積 (D - G - C - F) から選んでいる。
+ * この手のゲームで定番の「長三和音の上昇アルペジオ」「完全 5 度の取得音」を
+ * 避けることで、レトロな音色のまま響きだけを独自のものにしている。
+ *
+ * ジャンプ系は「刻んだ音 + スイープ」という共通のモチーフで組み、通常ジャンプと
+ * 大ジャンプが同じ仲間に聞こえるようにしてある (大ジャンプは刻みが 1 つ増えて
+ * スイープがより高く長い)。
+ */
 static const sfx_step_t SFX_START_STEPS[] = {
-    SFX_TONE(523, 50),
-    SFX_TONE(784, 50),
-    SFX_TONE(1047, 100),
+    SFX_TONE(587, 45),   /* D5 */
+    SFX_TONE(784, 45),   /* G5 */
+    SFX_TONE(1047, 55),  /* C6 */
+    SFX_REST(20),
+    SFX_TONE(1175, 110), /* D6 */
 };
-static const sfx_step_t SFX_JUMP_STEPS[] = {SFX_SWEEP(392, 880, 100)};
-static const sfx_step_t SFX_BIG_JUMP_STEPS[] = {SFX_SWEEP(392, 1568, 200)};
-static const sfx_step_t SFX_CROUCH_STEPS[] = {SFX_SWEEP(330, 165, 70)};
-static const sfx_step_t SFX_SCORE_STEPS[] = {SFX_TONE(1047, 30), SFX_TONE(1568, 50)};
-static const sfx_step_t SFX_GAME_OVER_STEPS[] = {SFX_SWEEP(440, 80, 500)};
+static const sfx_step_t SFX_JUMP_STEPS[] = {
+    SFX_TONE(587, 35),        /* D5 */
+    SFX_SWEEP(784, 1175, 75), /* G5 -> D6 */
+};
+static const sfx_step_t SFX_BIG_JUMP_STEPS[] = {
+    SFX_TONE(587, 35),          /* D5 */
+    SFX_TONE(784, 35),          /* G5 */
+    SFX_SWEEP(1047, 1760, 130), /* C6 -> A6 */
+};
+static const sfx_step_t SFX_CROUCH_STEPS[] = {SFX_SWEEP(440, 294, 60)}; /* A4 -> D4 */
+static const sfx_step_t SFX_SCORE_STEPS[] = {
+    SFX_TONE(784, 22),  /* G5 */
+    SFX_TONE(1047, 22), /* C6 */
+    SFX_TONE(1397, 55), /* F6 */
+};
+/* 衝突音は 2 つ重ねて鳴らす (show_game_over 参照) */
+static const sfx_step_t SFX_CRASH_STEPS[] = {SFX_SWEEP(700, 120, 180)};
+static const sfx_step_t SFX_FALL_STEPS[] = {SFX_SWEEP(440, 175, 450)}; /* A4 -> F3 */
 
 static const sfx_t SFX_START = SFX_DEF(SFX_START_STEPS, AUDIO_WAVE_SQUARE, 200);
 static const sfx_t SFX_JUMP = SFX_DEF(SFX_JUMP_STEPS, AUDIO_WAVE_SQUARE, 255);
 static const sfx_t SFX_BIG_JUMP = SFX_DEF(SFX_BIG_JUMP_STEPS, AUDIO_WAVE_SQUARE, 255);
-static const sfx_t SFX_CROUCH = SFX_DEF(SFX_CROUCH_STEPS, AUDIO_WAVE_TRIANGLE, 200);
+static const sfx_t SFX_CROUCH = SFX_DEF(SFX_CROUCH_STEPS, AUDIO_WAVE_TRIANGLE, 170);
 static const sfx_t SFX_SCORE = SFX_DEF(SFX_SCORE_STEPS, AUDIO_WAVE_SQUARE, 220);
-static const sfx_t SFX_GAME_OVER = SFX_DEF(SFX_GAME_OVER_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_CRASH = SFX_DEF(SFX_CRASH_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_FALL = SFX_DEF(SFX_FALL_STEPS, AUDIO_WAVE_TRIANGLE, 190);
 
 /* --- ゲーム状態 --- */
 static bool is_running;
@@ -349,8 +375,12 @@ static void refresh(void) {
 static void show_game_over(void) {
     matrix_border(LED_RED);
     matrix_show();
-    /* 衝突音はノイズ波形の下降スイープで「ドカン」と鳴らす */
-    audio_play(&SFX_GAME_OVER);
+    /*
+     * 衝突音はノイズの衝撃音と、下に落ちていく三角波を重ねて鳴らす。
+     * ミキサーが多声なので、1 つの効果音に詰め込まず 2 つ同時に鳴らせる。
+     */
+    audio_play(&SFX_CRASH);
+    audio_play(&SFX_FALL);
 }
 
 static void update(void) {
