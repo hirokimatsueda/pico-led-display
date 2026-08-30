@@ -40,10 +40,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 補足
+## Raspberry Pi Pico SDK (pico_sdk_import.cmake)
 
-`src/device/ht16k33.c` および `src/device/button.c` には、他にも同ライブラリを参照した
-旨のコメントがありますが、それらが指しているのは次のような内容で、著作物性のある
+リポジトリ直下の `pico_sdk_import.cmake` は、Raspberry Pi Pico SDK に同梱されている
+`external/pico_sdk_import.cmake` をそのまま複製したものです (SDK を外部プロジェクトから
+参照するための定型ファイルで、そのまま置くことが想定されています)。
+
+BSD 3-Clause ライセンスで提供されており、著作権表示とライセンス条文はファイル先頭に
+そのまま残してあります。
+
+- 出典: https://github.com/raspberrypi/pico-sdk
+- Copyright 2020 (c) 2020 Raspberry Pi (Trading) Ltd.
+- SPDX-License-Identifier: BSD-3-Clause
+
+なお、ビルドされるバイナリには Pico SDK 本体 (同じく BSD 3-Clause) のコードが含まれます。
+SDK 自体はこのリポジトリには含めておらず、ビルド時に `~/.pico-sdk` から参照しています。
+
+## 補足: 参照しているが複製ではないもの
+
+`src/device/ht16k33.c` および `src/device/button.c` には、Adafruit のライブラリを参照した
+旨のコメントが他にもありますが、それらが指しているのは次のような内容で、著作物性のある
 表現の複製ではありません。
 
 - HT16K33 のコマンド値 (発振器 ON / 表示 ON / 輝度) — チップのデータシート由来
