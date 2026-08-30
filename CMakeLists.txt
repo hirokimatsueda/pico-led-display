@@ -9,6 +9,11 @@ project(pico_led_display C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+# build/compile_commands.json を常に生成する。
+# エディタ (clangd や VS Code の C/C++ 拡張) がインクルードパスを正しく解決できるほか、
+# そこからコンパイルコマンドを取り出して警告レベルを上げた再チェックにも使える。
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 pico_sdk_init()
 
 add_executable(pico_led_display
