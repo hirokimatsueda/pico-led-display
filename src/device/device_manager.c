@@ -17,6 +17,7 @@
 #define PIN_AUDIO 20
 
 static ht16k33_t matrix_dev;
+static uint8_t matrix_level = 15; /* ht16k33_init() が設定する初期値と合わせる */
 static ht16k33_t seg_dev;
 static button_t btn_a;
 static button_t btn_b;
@@ -65,6 +66,17 @@ void matrix_border(led_color_t color) {
         matrix_set(0, y, color);
         matrix_set(MATRIX_WIDTH - 1, y, color);
     }
+}
+
+void matrix_brightness(uint8_t level) {
+    if (level > 15) {
+        level = 15;
+    }
+    if (level == matrix_level) {
+        return; /* 変化がなければ I2C を出さない */
+    }
+    matrix_level = level;
+    ht16k33_set_brightness(&matrix_dev, level);
 }
 
 void seg_text(const char *text) {

@@ -1,528 +1,584 @@
 /*
  * 爆弾解除ゲーム
  *
- * ステージごとに正解のボタン (A または B) がランダムに決まる。開始直後に
- * 一瞬だけワイヤーの色 (正解側が緑・不正解側が赤) がフラッシュ表示されるので、
- * それを記憶して制限時間内に正しい方を押す。ステージが進むほど制限時間と
- * ヒント表示時間が短くなり、前半だけ色が逆になる「フェイク」も混ざり始める。
+ * 1 本の導火線が燃え続けるなかで、ワイヤーを切り続ける。ラウンドの開始時に
+ * 一瞬だけ正解側のワイヤーが緑に光るので、それを憶えてボタン A (左) か
+ * ボタン B (右) を押す。正解なら導火線が少し伸び、間違えると残り時間が 4 割
+ * 吹き飛ぶ。**死ぬのは導火線が燃え尽きたときだけ**で、誤答は即死ではない。
+ * したがって残り時間だけが緊張の源であり、秒読み・点滅・爆発といった演出は
+ * 常に意味を持つ。スコアは切れたワイヤーの本数。
  *
- * 複雑な部類のゲームなので、タイマーと表示効果はこのファイル内に閉じた
- * 専用ヘルパーとして持つ (ゲーム間で共有する抽象は作らない)。
+ * 画面 (8x8):
+ *   外周 28 ドット = 導火線。残量に応じて緑→黄→赤に変わり、先端が炎として光る。
+ *   内側 6x6       = 操作盤。左右のワイヤー束 (x=1,2 と x=5,6) と中央の起爆装置。
+ * さらに残り時間が減るほど速くなる鼓動に合わせて、表示全体の輝度を明滅させる。
+ *
+ * 複雑な部類のゲームなので、導火線タイマーや表示パターンといった専用ヘルパーは
+ * 共有ユーティリティにせずこのファイル内に閉じて持つ。
  */
 #include <stdio.h>
 
 #include "game/games.h"
 
+#define COUNT_OF(a) ((int)(sizeof(a) / sizeof((a)[0])))
+
 typedef enum {
-    STATE_PLAYING,
-    STATE_SUCCESS,
-    STATE_GAME_OVER,
+    STATE_REVEAL, /* ワイヤーの色を見せている */
+    STATE_ARMED,  /* 入力待ち */
+    STATE_CUT,    /* 正解: ワイヤーが切れる */
+    STATE_SHORT,  /* 誤答: ショートして導火線が一気に燃える */
+    STATE_BLAST,  /* 爆発アニメーション */
+    STATE_OVER,   /* 残り火。両ボタン同時押しで再スタート */
 } bomb_state_t;
 
-/* --- 一時停止に対応したカウントダウンタイマー --- */
+/* --- 導火線 (一時停止に対応した、増減できるカウントダウン) --- */
 typedef struct {
-    uint32_t initial_ms;
     uint32_t remaining_ms;
-    uint32_t start_ms;
-    bool is_running;
-    bool is_paused;
-} bomb_timer_t;
+    uint32_t last_ms;
+    bool paused;
+} fuse_t;
 
-static void timer_reset(bomb_timer_t *t, uint32_t duration_ms) {
-    t->initial_ms = duration_ms;
-    t->remaining_ms = duration_ms;
-    t->start_ms = 0;
-    t->is_running = false;
-    t->is_paused = false;
+#define FUSE_MAX_MS 10000u
+
+static void fuse_reset(fuse_t *f, uint32_t ms) {
+    f->remaining_ms = (ms > FUSE_MAX_MS) ? FUSE_MAX_MS : ms;
+    f->last_ms = now_ms();
+    f->paused = false;
 }
 
-static void timer_start(bomb_timer_t *t) {
-    t->start_ms = now_ms();
-    t->is_running = true;
-    t->is_paused = false;
-}
-
-static uint32_t timer_update(bomb_timer_t *t) {
-    if (!t->is_running || t->is_paused) {
-        return t->remaining_ms;
+static uint32_t fuse_tick(fuse_t *f) {
+    if (f->paused) {
+        return f->remaining_ms;
     }
-    uint32_t elapsed = now_ms() - t->start_ms;
-    t->remaining_ms = (elapsed >= t->initial_ms) ? 0 : (t->initial_ms - elapsed);
-    return t->remaining_ms;
+    uint32_t now = now_ms();
+    uint32_t elapsed = now - f->last_ms;
+    f->last_ms = now;
+    f->remaining_ms = (elapsed >= f->remaining_ms) ? 0 : (f->remaining_ms - elapsed);
+    return f->remaining_ms;
 }
 
-static void timer_pause(bomb_timer_t *t) {
-    if (t->is_running && !t->is_paused) {
-        timer_update(t);
-        t->is_paused = true;
+/* 正解のボーナス (正) と誤答のペナルティ (負) を加える */
+static void fuse_add(fuse_t *f, int32_t delta_ms) {
+    int32_t value = (int32_t)f->remaining_ms + delta_ms;
+    if (value < 0) {
+        value = 0;
+    } else if (value > (int32_t)FUSE_MAX_MS) {
+        value = (int32_t)FUSE_MAX_MS;
     }
+    f->remaining_ms = (uint32_t)value;
 }
 
-static void timer_resume(bomb_timer_t *t) {
-    if (t->is_running && t->is_paused) {
-        /* 残り時間から再開するよう開始時刻を作り直す */
-        t->start_ms = now_ms() - (t->initial_ms - t->remaining_ms);
-        t->is_paused = false;
+static void fuse_pause(fuse_t *f) {
+    if (!f->paused) {
+        fuse_tick(f);
+        f->paused = true;
     }
 }
 
-/* --- 表示効果 --- */
+static void fuse_resume(fuse_t *f) {
+    if (f->paused) {
+        f->last_ms = now_ms(); /* 止まっていた分は経過させない */
+        f->paused = false;
+    }
+}
+
+/* --- 表示 --- */
 typedef struct {
     int8_t x, y;
 } point_t;
 
-/* 爆弾本体 (導火線の燃え代は含まない) */
-static const point_t BOMB_BODY_PATTERN[] = {
-    {3, 2}, {4, 2},                 /* 導火線の付け根 */
-    {2, 3}, {3, 3}, {4, 3}, {5, 3}, /* 本体上部 */
-    {2, 4}, {3, 4}, {4, 4}, {5, 4}, /* 本体中央 */
-    {2, 5}, {3, 5}, {4, 5}, {5, 5}, /* 本体下部 */
-    {3, 6}, {4, 6},                 /* 本体底部 */
+/* 外周を左上から時計回りに 1 周。導火線はこの順に並び、末尾から燃えて短くなる */
+static const point_t FUSE_RING[] = {
+    {0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0}, {7, 0},
+    {7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 5}, {7, 6}, {7, 7},
+    {6, 7}, {5, 7}, {4, 7}, {3, 7}, {2, 7}, {1, 7}, {0, 7},
+    {0, 6}, {0, 5}, {0, 4}, {0, 3}, {0, 2}, {0, 1},
+};
+#define RING_COUNT COUNT_OF(FUSE_RING)
+
+/* 爆発後の残り火 */
+static const point_t EMBER_PATTERN[] = {
+    {1, 6}, {3, 5}, {6, 6}, {2, 3}, {5, 2}, {4, 6}, {6, 3}, {1, 2},
 };
 
-/* 導火線の未燃焼部分。手前 (爆弾に近い側) から先端の順 */
-static const point_t FUSE_TRAIL[] = {{4, 1}, {4, 0}};
+#define WIRE_LEFT_X 1
+#define WIRE_RIGHT_X 5
 
-static const point_t EXPLOSION_PATTERN[] = {
-    {3, 3}, {4, 3}, {3, 4}, {4, 4},                                 /* 中央 */
-    {2, 2}, {5, 2}, {2, 5}, {5, 5}, {1, 3}, {6, 3}, {3, 1}, {4, 1}, /* 内側 */
-    {3, 6}, {4, 6},
-    {0, 0}, {7, 0}, {0, 7}, {7, 7}, {1, 1}, {6, 1}, {1, 6}, {6, 6}, /* 外側 */
-    {0, 3}, {7, 3}, {0, 4}, {7, 4}, {3, 0}, {4, 0}, {3, 7}, {4, 7},
-};
+/* 中心からの距離 (0 = 中央 2x2, 3 = 外周)。爆発の波紋に使う */
+static int shell_of(int x, int y) {
+    int dx = (x < 4) ? (3 - x) : (x - 4);
+    int dy = (y < 4) ? (3 - y) : (y - 4);
+    return (dx > dy) ? dx : dy;
+}
 
-static const point_t SUCCESS_PATTERN[] = {
-    {2, 4}, {3, 5}, {4, 4}, {5, 3}, {6, 2},                         /* チェックマーク */
-    {1, 1}, {6, 1}, {1, 6}, {6, 6}, {0, 3}, {7, 3}, {3, 0}, {4, 0}, /* 装飾 */
-    {3, 7}, {4, 7},
-};
-
-#define COUNT_OF(a) ((int)(sizeof(a) / sizeof((a)[0])))
-
-static bool blink_state;
-static uint32_t last_blink_ms;
-
-static void draw_pattern(const point_t *pattern, int count, led_color_t color) {
-    matrix_fill(LED_OFF);
-    for (int i = 0; i < count; i++) {
-        matrix_set(pattern[i].x, pattern[i].y, color);
+/* 導火線の残量を外周に描く。残りが少ないほど色が険しくなる */
+static void draw_ring(float fraction, bool flame_on) {
+    int lit = (int)(fraction * (float)RING_COUNT + 0.5f);
+    if (lit > RING_COUNT) {
+        lit = RING_COUNT;
     }
-    matrix_show();
+    if (lit <= 0) {
+        lit = (fraction > 0.0f) ? 1 : 0; /* 生きている間は 1 ドットだけ残す */
+    }
+
+    led_color_t body = (fraction > 0.5f) ? LED_GREEN : ((fraction > 0.2f) ? LED_YELLOW : LED_RED);
+    for (int i = 0; i < lit; i++) {
+        bool is_flame = (i == lit - 1);
+        led_color_t color = is_flame ? (flame_on ? LED_YELLOW : LED_RED) : body;
+        matrix_set(FUSE_RING[i].x, FUSE_RING[i].y, color);
+    }
 }
 
 /*
- * 爆弾の表示。残り時間の割合に応じて導火線が先端から燃え尽きて短くなり、
- * 燃え尽きた後は本体ごと高速点滅させて爆発直前の緊迫感を出す。
+ * ワイヤー束を 1 つ描く。gap は中央から数えた切れ幅で、0 = 無傷、
+ * 3 = 完全に切断。切断は中央から上下へ弾けるように広がる。
  */
-static void show_bomb(float remaining_fraction) {
-    int visible_trail;
-    uint32_t blink_interval_ms;
-
-    if (remaining_fraction <= 0.2f) {
-        visible_trail = 0;
-        blink_interval_ms = 100;
-    } else if (remaining_fraction <= 0.5f) {
-        visible_trail = 1;
-        blink_interval_ms = 250;
-    } else {
-        visible_trail = COUNT_OF(FUSE_TRAIL);
-        blink_interval_ms = 600;
-    }
-
-    uint32_t now = now_ms();
-    if (now - last_blink_ms >= blink_interval_ms) {
-        blink_state = !blink_state;
-        last_blink_ms = now;
-    }
-
-    matrix_fill(LED_OFF);
-
-    if (visible_trail == 0) {
-        /* 導火線が燃え尽きた後は本体ごと点滅させる */
-        if (blink_state) {
-            for (int i = 0; i < COUNT_OF(BOMB_BODY_PATTERN); i++) {
-                matrix_set(BOMB_BODY_PATTERN[i].x, BOMB_BODY_PATTERN[i].y, LED_RED);
-            }
-        }
-        matrix_show();
+static void draw_bundle(int x0, led_color_t color, int gap) {
+    if (color == LED_OFF) {
         return;
     }
-
-    for (int i = 0; i < COUNT_OF(BOMB_BODY_PATTERN); i++) {
-        matrix_set(BOMB_BODY_PATTERN[i].x, BOMB_BODY_PATTERN[i].y, LED_RED);
-    }
-
-    /* 燃え残りを描く。火がついている先端だけ点滅させる */
-    for (int i = 0; i < visible_trail; i++) {
-        bool is_tip = (i == visible_trail - 1);
-        if (!is_tip || blink_state) {
-            matrix_set(FUSE_TRAIL[i].x, FUSE_TRAIL[i].y, LED_YELLOW);
+    for (int x = x0; x < x0 + 2; x++) {
+        for (int y = 1; y <= 6; y++) {
+            int distance = (y <= 3) ? (4 - y) : (y - 3); /* 中央から 1..3 */
+            if (distance > gap) {
+                matrix_set(x, y, color);
+            }
         }
     }
+}
 
-    matrix_show();
+/* 中央の起爆装置 (2x2) */
+static void draw_core(led_color_t color) {
+    if (color == LED_OFF) {
+        return;
+    }
+    for (int x = 3; x <= 4; x++) {
+        for (int y = 3; y <= 4; y++) {
+            matrix_set(x, y, color);
+        }
+    }
 }
 
 /*
  * --- 効果音 ---
  *
- * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。
- * 残り時間は 1 秒ごとの秒読みとして鳴らし、警告域 (残り 20% 以下) では
- * 高く鋭い音に切り替えて緊迫感を出す。爆発はノイズと低い下降音の重ね。
+ * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。秒読みは鼓動と
+ * 同じ間隔で鳴らすため終盤は連打になるので振幅を抑え、切断音・ショート音・
+ * 爆発だけを前に出す。
  */
-static const sfx_step_t SFX_STAGE_STEPS[] = {
-    SFX_TONE(587, 35), /* D5 */
-    SFX_TONE(784, 55), /* G5 */
+static const sfx_step_t SFX_ARM_STEPS[] = {SFX_TONE(294, 40)};        /* D4 */
+static const sfx_step_t SFX_TICK_STEPS[] = {SFX_TONE(392, 26)};       /* G4 */
+static const sfx_step_t SFX_TICK_WARN_STEPS[] = {SFX_TONE(1175, 30)}; /* D6 */
+static const sfx_step_t SFX_CUT_STEPS[] = {
+    SFX_TONE(784, 35),  /* G5 */
+    SFX_TONE(1175, 55), /* D6 */
 };
-/*
- * 秒読みは低い音のままだと小さなスピーカーでは埋もれてしまうため、三角波ではなく
- * 矩形波にして倍音を持たせている (基音が弱くても倍音のおかげで聞こえる)。
- * 警告音との差は音程と長さで付ける。
- */
-static const sfx_step_t SFX_TICK_STEPS[] = {SFX_TONE(392, 28)};      /* G4 */
-static const sfx_step_t SFX_TICK_WARN_STEPS[] = {SFX_TONE(880, 35)}; /* A5 */
-static const sfx_step_t SFX_SUCCESS_STEPS[] = {
-    SFX_TONE(587, 40),  /* D5 */
-    SFX_TONE(784, 40),  /* G5 */
-    SFX_TONE(1047, 40), /* C6 */
-    SFX_TONE(1397, 90), /* F6 */
-};
-static const sfx_step_t SFX_EXPLODE_STEPS[] = {SFX_SWEEP(900, 60, 400)};
+static const sfx_step_t SFX_SHORT_STEPS[] = {SFX_SWEEP(500, 120, 160)};
+static const sfx_step_t SFX_SHORT_LOW_STEPS[] = {SFX_SWEEP(294, 110, 260)}; /* D4 から下降 */
+static const sfx_step_t SFX_BLAST_STEPS[] = {SFX_SWEEP(900, 60, 400)};
 static const sfx_step_t SFX_RUMBLE_STEPS[] = {SFX_SWEEP(392, 147, 600)}; /* G4 -> D3 */
 
-static const sfx_t SFX_STAGE = SFX_DEF(SFX_STAGE_STEPS, AUDIO_WAVE_SQUARE, 190);
-static const sfx_t SFX_TICK = SFX_DEF(SFX_TICK_STEPS, AUDIO_WAVE_SQUARE, 215);
-static const sfx_t SFX_TICK_WARN = SFX_DEF(SFX_TICK_WARN_STEPS, AUDIO_WAVE_SQUARE, 235);
-static const sfx_t SFX_SUCCESS = SFX_DEF(SFX_SUCCESS_STEPS, AUDIO_WAVE_SQUARE, 215);
-static const sfx_t SFX_EXPLODE = SFX_DEF(SFX_EXPLODE_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_ARM = SFX_DEF(SFX_ARM_STEPS, AUDIO_WAVE_SQUARE, 150);
+static const sfx_t SFX_TICK = SFX_DEF(SFX_TICK_STEPS, AUDIO_WAVE_SQUARE, 170);
+static const sfx_t SFX_TICK_WARN = SFX_DEF(SFX_TICK_WARN_STEPS, AUDIO_WAVE_SQUARE, 205);
+static const sfx_t SFX_CUT = SFX_DEF(SFX_CUT_STEPS, AUDIO_WAVE_SQUARE, 200);
+static const sfx_t SFX_SHORT = SFX_DEF(SFX_SHORT_STEPS, AUDIO_WAVE_NOISE, 240);
+static const sfx_t SFX_SHORT_LOW = SFX_DEF(SFX_SHORT_LOW_STEPS, AUDIO_WAVE_TRIANGLE, 190);
+static const sfx_t SFX_BLAST = SFX_DEF(SFX_BLAST_STEPS, AUDIO_WAVE_NOISE, 255);
 static const sfx_t SFX_RUMBLE = SFX_DEF(SFX_RUMBLE_STEPS, AUDIO_WAVE_TRIANGLE, 200);
 
-/* --- ゲーム本体 --- */
-#define BASE_TIME_MS 10000u
-#define MIN_TIME_MS 3000u
-#define TIME_REDUCTION_MS 200u
+/* --- 時間の設計 --- */
+#define BONUS_BASE_MS 2400u /* 1 本切るごとに伸びる長さ。切るほど渋くなる */
+#define BONUS_STEP_MS 60u
+#define BONUS_MIN_MS 900u
 
-#define REVEAL_BASE_MS 500u
-#define REVEAL_MIN_MS 150u
-#define REVEAL_REDUCTION_MS 15u
+#define PENALTY_NUM 2u /* 誤答で残り時間の 2/5 を失う */
+#define PENALTY_DEN 5u
+#define PENALTY_MIN_MS 600u
 
+/* 正解の色を見せる時間。切るほど短くなる */
+#define REVEAL_BASE_MS 600u
+#define REVEAL_STEP_MS 18u
+#define REVEAL_MIN_MS 140u
+
+/* フェイク (先に嘘の色を見せる) の発生率 */
 #define FAKE_CHANCE_MAX 0.6f
-#define FAKE_CHANCE_PER_STAGE 0.05f
+#define FAKE_CHANCE_PER_CUT 0.05f
 
-#define SUCCESS_EFFECT_MS 1000u
-#define EXPLOSION_EFFECT_MS 2000u
+/* 鼓動の間隔。導火線が短くなるほど速くなる */
+#define BEAT_SLOW_MS 1000u
+#define BEAT_FAST_MS 190u
+#define BEAT_FLASH_MS 80u
+#define BRIGHT_PEAK 15u
+#define BRIGHT_BASE 7u
 
+#define CUT_EFFECT_MS 420u
+#define SHORT_EFFECT_MS 520u
+#define BLAST_EFFECT_MS 1800u
+
+/* --- 状態 --- */
 static bomb_state_t state;
-static int current_stage;
-static int max_stage_reached;
+static fuse_t fuse;
+static int cuts; /* 切れたワイヤーの本数 = スコア */
 static bool correct_is_a;
 
-static bomb_timer_t timer;
-static uint32_t current_stage_time_ms;
-
+static uint32_t reveal_start_ms;
+static uint32_t reveal_fake_ms; /* 嘘の色を見せている長さ (0 ならフェイクなし) */
+static uint32_t reveal_true_ms;
 static uint32_t effect_start_ms;
-static bool button_pressed;
+static bool cut_was_a; /* 直前に選んだ側 */
+
+static float ring_shown; /* 表示用にならした導火線の残量 */
+static uint32_t beat_ms; /* 直近の鼓動の時刻 */
+static uint32_t flash_until_ms;
+static bool beat_flash;
+
 static bool last_pressed_a;
 static bool last_pressed_b;
+static int last_score_shown;
 
-static uint32_t input_delay_duration_ms;
-static uint32_t input_delay_start_ms;
-static bool input_delay_started;
-static bool hint_has_fake;
-
-static int last_display_time;
-
-static bool is_input_delay_active(void) {
-    if (!input_delay_started) {
-        return false;
+static void show_score(void) {
+    if (cuts != last_score_shown) {
+        seg_int02(cuts);
+        last_score_shown = cuts;
     }
-    return (now_ms() - input_delay_start_ms) < input_delay_duration_ms;
 }
 
-static void start_new_stage(void) {
+/* 導火線の残量に合わせて鼓動を刻み、輝度と秒読みを駆動する */
+static void beat_update(void) {
+    float fraction = (float)fuse.remaining_ms / (float)FUSE_MAX_MS;
+    uint32_t interval = BEAT_FAST_MS + (uint32_t)((float)(BEAT_SLOW_MS - BEAT_FAST_MS) * fraction);
+
+    uint32_t now = now_ms();
+    if (now - beat_ms >= interval) {
+        beat_ms = now;
+        flash_until_ms = now + BEAT_FLASH_MS;
+        audio_play((fraction <= 0.25f) ? &SFX_TICK_WARN : &SFX_TICK);
+    }
+    beat_flash = (now < flash_until_ms);
+    matrix_brightness(beat_flash ? (uint8_t)BRIGHT_PEAK : (uint8_t)BRIGHT_BASE);
+}
+
+/* 表示用の残量を実際の残量へなめらかに寄せる (ボーナス / ペナルティが動いて見える) */
+static void ring_shown_update(void) {
+    float target = (float)fuse.remaining_ms / (float)FUSE_MAX_MS;
+    ring_shown += (target - ring_shown) * 0.28f;
+    if (ring_shown < 0.0f) {
+        ring_shown = 0.0f;
+    } else if (ring_shown > 1.0f) {
+        ring_shown = 1.0f;
+    }
+}
+
+/* 外周を描いた状態でフレームを始める。glitch はフェイク中の「信号の乱れ」 */
+static void begin_frame(bool glitch) {
+    matrix_fill(LED_OFF);
+    if (glitch) {
+        matrix_border(LED_YELLOW);
+    } else {
+        draw_ring(ring_shown, beat_flash);
+    }
+}
+
+static void start_blast(const char *reason) {
+    state = STATE_BLAST;
+    effect_start_ms = now_ms();
+    /* 爆発の瞬間に押していたボタンでそのまま再スタートしてしまわないようにする */
+    last_pressed_a = btn_a_pressed();
+    last_pressed_b = btn_b_pressed();
+    audio_play(&SFX_BLAST);
+    audio_play(&SFX_RUMBLE);
+    printf("BOOM (%s) - wires cut: %d\n", reason, cuts);
+}
+
+static void start_round(void) {
     correct_is_a = (rand_below(2) == 0);
 
-    /* ステージが進むほど制限時間を短くする (最小 3 秒) */
-    uint32_t reduction = (uint32_t)(current_stage - 1) * TIME_REDUCTION_MS;
-    uint32_t stage_time =
-        (reduction >= BASE_TIME_MS - MIN_TIME_MS) ? MIN_TIME_MS : BASE_TIME_MS - reduction;
-    current_stage_time_ms = stage_time;
+    uint32_t reduction = (uint32_t)cuts * REVEAL_STEP_MS;
+    reveal_true_ms =
+        (reduction >= REVEAL_BASE_MS - REVEAL_MIN_MS) ? REVEAL_MIN_MS : (REVEAL_BASE_MS - reduction);
 
-    timer_reset(&timer, stage_time);
-    timer_start(&timer);
-
-    button_pressed = false;
-
-    /* ヒント表示時間もステージが進むほど短くする */
-    uint32_t reveal_reduction = (uint32_t)(current_stage - 1) * REVEAL_REDUCTION_MS;
-    input_delay_duration_ms = (reveal_reduction >= REVEAL_BASE_MS - REVEAL_MIN_MS)
-                                  ? REVEAL_MIN_MS
-                                  : REVEAL_BASE_MS - reveal_reduction;
-
-    /* フェイク点滅の発生確率はステージが進むほど上がる */
-    float fake_chance = (float)(current_stage - 1) * FAKE_CHANCE_PER_STAGE;
+    /*
+     * フェイクは「正しい色を見せる時間」を削らず、その前に嘘の色を足す形にする。
+     * 見分ける手掛かりとして、嘘を見せている間は外周が黄色くちらつく。
+     */
+    float fake_chance = (float)cuts * FAKE_CHANCE_PER_CUT;
     if (fake_chance > FAKE_CHANCE_MAX) {
         fake_chance = FAKE_CHANCE_MAX;
     }
-    hint_has_fake = rand_float() < fake_chance;
+    reveal_fake_ms = (rand_float() < fake_chance) ? (reveal_true_ms * 3u / 4u) : 0u;
 
-    input_delay_start_ms = now_ms();
-    input_delay_started = true;
-
-    state = STATE_PLAYING;
-
-    audio_play(&SFX_STAGE);
-
-    printf("Stage %d started - Correct button: %c, Time: %.1fs\n", current_stage,
-           correct_is_a ? 'A' : 'B', (double)stage_time / 1000.0);
+    reveal_start_ms = now_ms();
+    state = STATE_REVEAL;
+    audio_play(&SFX_ARM);
 }
 
 static void initialize(void) {
-    state = STATE_PLAYING;
-    current_stage = 1;
-    max_stage_reached = 1;
-    correct_is_a = true;
-
-    button_pressed = false;
+    cuts = 0;
+    last_score_shown = -1;
     last_pressed_a = false;
     last_pressed_b = false;
     effect_start_ms = 0;
-    last_display_time = -1;
+    cut_was_a = false;
 
-    blink_state = false;
-    last_blink_ms = now_ms();
+    fuse_reset(&fuse, FUSE_MAX_MS);
+    ring_shown = 1.0f;
+    beat_ms = now_ms();
+    flash_until_ms = 0;
+    beat_flash = false;
 
-    timer_reset(&timer, BASE_TIME_MS);
+    matrix_brightness((uint8_t)BRIGHT_BASE);
+    show_score();
+    start_round();
 
-    seg_text(NULL);
-    show_bomb(1.0f);
-
-    start_new_stage();
-
-    printf("Bomb Defuse Game initialized - Stage %d\n", current_stage);
+    printf("Bomb Defuse started - fuse %.1fs\n", (double)FUSE_MAX_MS / 1000.0);
 }
 
-static void handle_correct_answer(void) {
-    state = STATE_SUCCESS;
-    timer_pause(&timer);
-    draw_pattern(SUCCESS_PATTERN, COUNT_OF(SUCCESS_PATTERN), LED_GREEN);
-    effect_start_ms = now_ms();
-    audio_play(&SFX_SUCCESS);
-
-    current_stage++;
-    if (current_stage > max_stage_reached) {
-        max_stage_reached = current_stage;
-    }
-    printf("Correct! Advancing to stage %d\n", current_stage);
-}
-
-static void handle_incorrect_answer(void) {
-    state = STATE_GAME_OVER;
-    timer_pause(&timer);
-    draw_pattern(EXPLOSION_PATTERN, COUNT_OF(EXPLOSION_PATTERN), LED_RED);
-    effect_start_ms = now_ms();
-    /* ノイズの爆発音と低い下降音を重ねる */
-    audio_play(&SFX_EXPLODE);
-    audio_play(&SFX_RUMBLE);
-    printf("Wrong button! Game Over at stage %d\n", current_stage);
-    printf("Final Score: Stage %d\n", max_stage_reached);
-}
-
-static void handle_button_press(bool pressed_a) {
-    if (button_pressed || state != STATE_PLAYING) {
-        return; /* 重複入力を防止する */
-    }
-    button_pressed = true;
-
-    printf("Button %c pressed - Correct: %c\n", pressed_a ? 'A' : 'B', correct_is_a ? 'A' : 'B');
+static void cut_wire(bool pressed_a) {
+    cut_was_a = pressed_a;
 
     if (pressed_a == correct_is_a) {
-        handle_correct_answer();
-    } else {
-        handle_incorrect_answer();
-    }
-}
-
-static void check_button_input(void) {
-    bool pressed_a = btn_a_pressed();
-    bool pressed_b = btn_b_pressed();
-
-    /* ヒント表示中は入力を無視する (待機終了後の誤検出を防ぐため状態だけ更新) */
-    if (is_input_delay_active()) {
-        last_pressed_a = pressed_a;
-        last_pressed_b = pressed_b;
+        uint32_t reduction = (uint32_t)cuts * BONUS_STEP_MS;
+        uint32_t bonus =
+            (reduction >= BONUS_BASE_MS - BONUS_MIN_MS) ? BONUS_MIN_MS : (BONUS_BASE_MS - reduction);
+        fuse_add(&fuse, (int32_t)bonus);
+        cuts++;
+        state = STATE_CUT;
+        effect_start_ms = now_ms();
+        audio_play(&SFX_CUT);
+        printf("Cut %d - fuse +%ums (%ums left)\n", cuts, (unsigned)bonus,
+               (unsigned)fuse.remaining_ms);
         return;
     }
 
-    /* CircuitPython 版と同じく、ボタンを「離した」タイミングで判定する */
-    if (last_pressed_a && !pressed_a) {
-        handle_button_press(true);
+    /* 誤答: 残り時間の 4 割 (最低 600ms) が吹き飛ぶ。即死はしない */
+    uint32_t penalty = fuse.remaining_ms * PENALTY_NUM / PENALTY_DEN;
+    if (penalty < PENALTY_MIN_MS) {
+        penalty = PENALTY_MIN_MS;
     }
-    if (last_pressed_b && !pressed_b) {
-        handle_button_press(false);
-    }
-
-    last_pressed_a = pressed_a;
-    last_pressed_b = pressed_b;
-}
-
-static void check_timer(void) {
-    if (timer_update(&timer) > 0) {
-        return;
-    }
-
-    state = STATE_GAME_OVER;
-    timer_pause(&timer);
-    draw_pattern(EXPLOSION_PATTERN, COUNT_OF(EXPLOSION_PATTERN), LED_RED);
+    fuse_add(&fuse, -(int32_t)penalty);
+    state = STATE_SHORT;
     effect_start_ms = now_ms();
-    audio_play(&SFX_EXPLODE);
-    audio_play(&SFX_RUMBLE);
-    printf("Time's up! Game Over at stage %d\n", current_stage);
-    printf("Final Score: Stage %d\n", max_stage_reached);
+    audio_play(&SFX_SHORT);
+    audio_play(&SFX_SHORT_LOW);
+    printf("Short circuit - fuse -%ums (%ums left)\n", (unsigned)penalty,
+           (unsigned)fuse.remaining_ms);
+}
+
+/* 導火線が尽きていたら爆発へ移る */
+static bool check_burnout(void) {
+    if (fuse.remaining_ms > 0) {
+        return false;
+    }
+    start_blast("fuse burned out");
+    return true;
+}
+
+static void update_reveal(void) {
+    uint32_t elapsed = now_ms() - reveal_start_ms;
+    if (elapsed >= reveal_fake_ms + reveal_true_ms) {
+        state = STATE_ARMED;
+        return;
+    }
+
+    bool faking = (elapsed < reveal_fake_ms);
+    bool show_a_green = faking ? !correct_is_a : correct_is_a;
+
+    /* フェイク中は外周を黄色くちらつかせて「信号が乱れている」ことを見せる */
+    begin_frame(faking && ((now_ms() / 60u) % 2u == 0u));
+    draw_bundle(WIRE_LEFT_X, show_a_green ? LED_GREEN : LED_RED, 0);
+    draw_bundle(WIRE_RIGHT_X, show_a_green ? LED_RED : LED_GREEN, 0);
+    draw_core(faking ? LED_YELLOW : LED_RED);
+    matrix_show();
+}
+
+static void update_armed(void) {
+    if (btn_a_fell()) {
+        cut_wire(true);
+        return;
+    }
+    if (btn_b_fell()) {
+        cut_wire(false);
+        return;
+    }
+
+    begin_frame(false);
+    draw_bundle(WIRE_LEFT_X, LED_RED, 0);
+    draw_bundle(WIRE_RIGHT_X, LED_RED, 0);
+    draw_core(beat_flash ? LED_YELLOW : LED_RED);
+    matrix_show();
+}
+
+/* 選んだ束が中央から弾けて切れる */
+static void update_cut(void) {
+    uint32_t elapsed = now_ms() - effect_start_ms;
+    if (elapsed >= CUT_EFFECT_MS) {
+        start_round();
+        return;
+    }
+
+    int gap = (int)(elapsed * 4u / CUT_EFFECT_MS); /* 0..3 */
+    begin_frame(false);
+    draw_bundle(cut_was_a ? WIRE_LEFT_X : WIRE_RIGHT_X, LED_GREEN, gap);
+    draw_bundle(cut_was_a ? WIRE_RIGHT_X : WIRE_LEFT_X, LED_RED, 0);
+    draw_core((gap < 2) ? LED_GREEN : LED_RED);
+    matrix_show();
+}
+
+/* 選んだ束がショートして激しく明滅し、正解だった側を緑で教える */
+static void update_short(void) {
+    uint32_t elapsed = now_ms() - effect_start_ms;
+    if (elapsed >= SHORT_EFFECT_MS) {
+        start_round();
+        return;
+    }
+
+    bool spark = ((elapsed / 60u) % 2u == 0u);
+    int wrong_x = cut_was_a ? WIRE_LEFT_X : WIRE_RIGHT_X;
+    int right_x = cut_was_a ? WIRE_RIGHT_X : WIRE_LEFT_X;
+
+    begin_frame(false);
+    draw_bundle(wrong_x, spark ? LED_YELLOW : LED_RED, 0);
+    draw_bundle(right_x, LED_GREEN, 0);
+    draw_core(spark ? LED_YELLOW : LED_OFF);
+    matrix_show();
 }
 
 /*
- * ヒント表示 (ワイヤーカラー)
- *
- * 画面を左右に分け、正解ボタン側を緑・不正解側を赤で塗る。表示は一瞬なので
- * 記憶を頼りに判断することになる。フェイク発生時は前半だけ色が逆になり、
- * 後半で必ず正しい色に切り替わる。
+ * 爆発。白飛び → 外へ広がる波紋 → 崩れて残り火、の 3 段で輝度も落としていく。
+ * 静止画を数秒出すのではなく、時間の流れを見せることを狙っている。
  */
-static void show_input_delay_display(void) {
-    led_color_t real_left = correct_is_a ? LED_GREEN : LED_RED;
-    led_color_t real_right = correct_is_a ? LED_RED : LED_GREEN;
-
-    bool show_fake = false;
-    if (hint_has_fake) {
-        show_fake = (now_ms() - input_delay_start_ms) < (input_delay_duration_ms / 2);
+static void update_blast(void) {
+    uint32_t elapsed = now_ms() - effect_start_ms;
+    if (elapsed >= BLAST_EFFECT_MS) {
+        state = STATE_OVER;
+        return;
     }
-
-    led_color_t left = show_fake ? real_right : real_left;
-    led_color_t right = show_fake ? real_left : real_right;
 
     matrix_fill(LED_OFF);
-    for (int x = 0; x < 4; x++) {
-        for (int y = 0; y < MATRIX_HEIGHT; y++) {
-            matrix_set(x, y, left);
+
+    if (elapsed < 120u) {
+        matrix_brightness((uint8_t)BRIGHT_PEAK);
+        matrix_fill(LED_YELLOW);
+    } else if (elapsed < 900u) {
+        matrix_brightness((uint8_t)BRIGHT_PEAK);
+        int front = (int)((elapsed - 120u) * 4u / 780u); /* 0..3 の波面 */
+        for (int x = 0; x < MATRIX_WIDTH; x++) {
+            for (int y = 0; y < MATRIX_HEIGHT; y++) {
+                int shell = shell_of(x, y);
+                if (shell == front) {
+                    matrix_set(x, y, LED_YELLOW);
+                } else if (shell < front) {
+                    matrix_set(x, y, LED_RED);
+                }
+            }
+        }
+    } else {
+        /* 残り火: 明滅しながら暗くなる */
+        uint32_t fade = (elapsed - 900u) * 10u / (BLAST_EFFECT_MS - 900u); /* 0..9 */
+        matrix_brightness((uint8_t)((fade >= 9u) ? 3u : (12u - fade)));
+        bool phase = ((elapsed / 90u) % 2u == 0u);
+        for (int i = 0; i < COUNT_OF(EMBER_PATTERN); i++) {
+            if ((i % 2 == 0) == phase) {
+                matrix_set(EMBER_PATTERN[i].x, EMBER_PATTERN[i].y, LED_RED);
+            }
         }
     }
-    for (int x = 4; x < MATRIX_WIDTH; x++) {
-        for (int y = 0; y < MATRIX_HEIGHT; y++) {
-            matrix_set(x, y, right);
-        }
-    }
+
     matrix_show();
-
-    seg_text("--");
 }
 
-static void update_display(void) {
-    if (is_input_delay_active()) {
-        show_input_delay_display();
-        return;
-    }
-
-    uint32_t remaining_ms = timer_update(&timer);
-
-    /* ステージごとに制限時間が違うので、導火線の長さは割合で決める */
-    float fraction =
-        (current_stage_time_ms > 0) ? (float)remaining_ms / (float)current_stage_time_ms : 0.0f;
-    show_bomb(fraction);
-
-    /* 残り時間は切り上げた整数秒を 2 桁で表示する */
-    int display_time = (int)((remaining_ms + 999u) / 1000u);
-    seg_int02(display_time);
-
-    if (display_time != last_display_time) {
-        /* 残り時間が 1 秒進むごとに秒読みを鳴らす */
-        audio_play((fraction <= 0.2f) ? &SFX_TICK_WARN : &SFX_TICK);
-        printf("Stage %d - Time: %02ds%s\n", current_stage, display_time,
-               (fraction <= 0.2f) ? " [WARNING]" : "");
-        last_display_time = display_time;
-    }
-}
-
-static void show_success_effect(void) {
-    if (now_ms() - effect_start_ms < SUCCESS_EFFECT_MS) {
-        draw_pattern(SUCCESS_PATTERN, COUNT_OF(SUCCESS_PATTERN), LED_GREEN);
-        seg_int02(current_stage - 1); /* 完了したステージ数 */
-        return;
-    }
-    start_new_stage();
-}
-
-static void check_game_over_input(void) {
+static void update_over(void) {
     bool pressed_a = btn_a_pressed();
     bool pressed_b = btn_b_pressed();
 
-    /* 左右同時押しでリセット */
+    /* 両ボタン同時押しで再スタート */
     if (pressed_a && pressed_b && !(last_pressed_a && last_pressed_b)) {
         initialize();
         return;
     }
-
     last_pressed_a = pressed_a;
     last_pressed_b = pressed_b;
-}
 
-static void show_game_over_effect(void) {
-    check_game_over_input();
-
-    if (now_ms() - effect_start_ms < EXPLOSION_EFFECT_MS) {
-        draw_pattern(EXPLOSION_PATTERN, COUNT_OF(EXPLOSION_PATTERN), LED_RED);
-        seg_int02(max_stage_reached);
+    matrix_brightness(3);
+    matrix_fill(LED_OFF);
+    bool phase = ((now_ms() / 500u) % 2u == 0u);
+    for (int i = 0; i < COUNT_OF(EMBER_PATTERN); i++) {
+        if ((i % 2 == 0) == phase) {
+            matrix_set(EMBER_PATTERN[i].x, EMBER_PATTERN[i].y, LED_RED);
+        }
     }
-    /* エフェクト終了後はゲーム選択で切り替えられるまでそのまま待機する */
+    matrix_show();
 }
 
 static void update(void) {
+    if (state == STATE_BLAST) {
+        update_blast();
+        return;
+    }
+    if (state == STATE_OVER) {
+        update_over();
+        return;
+    }
+
+    /* ここから先は導火線が燃えている状態。演出中も時間は進む */
+    fuse_tick(&fuse);
+    beat_update();
+    ring_shown_update();
+    show_score();
+
+    if (check_burnout()) {
+        return;
+    }
+
     switch (state) {
-    case STATE_PLAYING:
-        check_button_input();
-        check_timer();
-        update_display();
+    case STATE_REVEAL:
+        update_reveal();
         break;
-    case STATE_SUCCESS:
-        show_success_effect();
+    case STATE_ARMED:
+        update_armed();
         break;
-    case STATE_GAME_OVER:
-        show_game_over_effect();
+    case STATE_CUT:
+        update_cut();
         break;
+    case STATE_SHORT:
+        update_short();
+        break;
+    case STATE_BLAST:
+    case STATE_OVER:
+        break; /* 冒頭で処理済み */
     }
 }
 
 static void pause_game(void) {
-    if (state == STATE_PLAYING) {
-        timer_pause(&timer);
-    }
+    fuse_pause(&fuse);
     audio_stop_all();
-    printf("Bomb Defuse Game paused\n");
+    matrix_brightness(15); /* 選択モードや次のゲームに暗いまま渡さない */
+    printf("Bomb Defuse paused\n");
 }
 
 static void resume_game(void) {
-    if (state == STATE_PLAYING) {
-        timer_resume(&timer);
-    }
-    printf("Bomb Defuse Game resumed\n");
+    fuse_resume(&fuse);
+    beat_ms = now_ms();
+    flash_until_ms = 0;
+    printf("Bomb Defuse resumed\n");
 }
 
 static void finalize(void) {
     audio_stop_all();
+    matrix_brightness(15);
     matrix_fill(LED_OFF);
     matrix_show();
     seg_text(NULL);
 
-    state = STATE_PLAYING;
-    current_stage = 1;
-    max_stage_reached = 1;
-    correct_is_a = true;
-    button_pressed = false;
+    state = STATE_REVEAL;
+    cuts = 0;
+    last_score_shown = -1;
     last_pressed_a = false;
     last_pressed_b = false;
-    effect_start_ms = 0;
-    timer_reset(&timer, BASE_TIME_MS);
+    fuse_reset(&fuse, FUSE_MAX_MS);
 
-    printf("Bomb Defuse Game finalized\n");
+    printf("Bomb Defuse finalized\n");
 }
 
 const game_t game_bomb_defuse = {

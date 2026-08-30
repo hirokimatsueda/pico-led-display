@@ -36,6 +36,11 @@ void matrix_set(int x, int y, led_color_t color);
 void matrix_show(void);
 /* 外周 1 ドットを指定色で描く (show は呼び出し側に委ねる) */
 void matrix_border(led_color_t color);
+/*
+ * 表示全体の輝度 (0..15)。HT16K33 の輝度レジスタを直接叩くので描画とは独立に効く。
+ * 下げたゲームは finalize / pause で 15 に戻すこと。
+ */
+void matrix_brightness(uint8_t level);
 
 /* --- 7セグ表示器 --- */
 void seg_text(const char *text); /* NULL または "" でクリア */
