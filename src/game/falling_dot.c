@@ -9,6 +9,31 @@
 
 #include "game/games.h"
 
+/*
+ * --- 効果音 ---
+ *
+ * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。
+ * 移動音は連打されるため、聞き取れるぎりぎりまで短く弱くしてある。
+ * 衝突音はノイズの衝撃音と落ちていく三角波を重ねて鳴らす。
+ */
+static const sfx_step_t SFX_START_STEPS[] = {
+    SFX_TONE(587, 40),  /* D5 */
+    SFX_TONE(1047, 70), /* C6 */
+};
+static const sfx_step_t SFX_MOVE_STEPS[] = {SFX_TONE(880, 18)}; /* A5 */
+static const sfx_step_t SFX_SCORE_STEPS[] = {
+    SFX_TONE(784, 20),  /* G5 */
+    SFX_TONE(1047, 45), /* C6 */
+};
+static const sfx_step_t SFX_CRASH_STEPS[] = {SFX_SWEEP(600, 100, 160)};
+static const sfx_step_t SFX_FALL_STEPS[] = {SFX_SWEEP(392, 147, 380)}; /* G4 -> D3 */
+
+static const sfx_t SFX_START = SFX_DEF(SFX_START_STEPS, AUDIO_WAVE_SQUARE, 190);
+static const sfx_t SFX_MOVE = SFX_DEF(SFX_MOVE_STEPS, AUDIO_WAVE_TRIANGLE, 130);
+static const sfx_t SFX_SCORE = SFX_DEF(SFX_SCORE_STEPS, AUDIO_WAVE_SQUARE, 200);
+static const sfx_t SFX_CRASH = SFX_DEF(SFX_CRASH_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_FALL = SFX_DEF(SFX_FALL_STEPS, AUDIO_WAVE_TRIANGLE, 180);
+
 static bool is_running;
 static bool score_shown;
 
@@ -49,6 +74,8 @@ static void initialize(void) {
 
     last_drop_ms = now_ms();
     both_pressed_prev = false;
+
+    audio_play(&SFX_START);
 }
 
 static void refresh(void) {
@@ -75,11 +102,13 @@ static bool move_objects(void) {
         int next = player_x + 1;
         player_x = (next > MATRIX_WIDTH - 2) ? MATRIX_WIDTH - 2 : next;
         moved = true;
+        audio_play(&SFX_MOVE);
     }
     if (btn_b_fell()) {
         int next = player_x - 1;
         player_x = (next < 0) ? 0 : next;
         moved = true;
+        audio_play(&SFX_MOVE);
     }
 
     uint32_t now = now_ms();
@@ -92,6 +121,7 @@ static bool move_objects(void) {
             }
         }
         if (!dot.is_visible) {
+            audio_play(&SFX_SCORE);
             spawn_dot();
         }
         moved = true;
@@ -107,6 +137,9 @@ static void update(void) {
             printf("Game over. score = %d\n\n", dot_count - 1);
             matrix_border(LED_RED);
             matrix_show();
+            /* ノイズの衝撃音と下降する三角波を重ねる */
+            audio_play(&SFX_CRASH);
+            audio_play(&SFX_FALL);
 
             /*
              * 衝突した瞬間に両ボタンが押されたままだと「両方押されている状態への
@@ -148,7 +181,10 @@ static void update(void) {
     }
 }
 
-static void pause_game(void) { pause_ms = now_ms(); }
+static void pause_game(void) {
+    pause_ms = now_ms();
+    audio_stop_all();
+}
 
 static void resume_game(void) {
     /* 一時停止していた時間だけ落下タイマーをずらす */
@@ -156,6 +192,7 @@ static void resume_game(void) {
 }
 
 static void finalize(void) {
+    audio_stop_all();
     matrix_fill(LED_OFF);
     matrix_show();
 }

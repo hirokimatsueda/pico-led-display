@@ -163,6 +163,40 @@ static void show_bomb(float remaining_fraction) {
     matrix_show();
 }
 
+/*
+ * --- 効果音 ---
+ *
+ * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。
+ * 残り時間は 1 秒ごとの秒読みとして鳴らし、警告域 (残り 20% 以下) では
+ * 高く鋭い音に切り替えて緊迫感を出す。爆発はノイズと低い下降音の重ね。
+ */
+static const sfx_step_t SFX_STAGE_STEPS[] = {
+    SFX_TONE(587, 35), /* D5 */
+    SFX_TONE(784, 55), /* G5 */
+};
+/*
+ * 秒読みは低い音のままだと小さなスピーカーでは埋もれてしまうため、三角波ではなく
+ * 矩形波にして倍音を持たせている (基音が弱くても倍音のおかげで聞こえる)。
+ * 警告音との差は音程と長さで付ける。
+ */
+static const sfx_step_t SFX_TICK_STEPS[] = {SFX_TONE(392, 28)};      /* G4 */
+static const sfx_step_t SFX_TICK_WARN_STEPS[] = {SFX_TONE(880, 35)}; /* A5 */
+static const sfx_step_t SFX_SUCCESS_STEPS[] = {
+    SFX_TONE(587, 40),  /* D5 */
+    SFX_TONE(784, 40),  /* G5 */
+    SFX_TONE(1047, 40), /* C6 */
+    SFX_TONE(1397, 90), /* F6 */
+};
+static const sfx_step_t SFX_EXPLODE_STEPS[] = {SFX_SWEEP(900, 60, 400)};
+static const sfx_step_t SFX_RUMBLE_STEPS[] = {SFX_SWEEP(392, 147, 600)}; /* G4 -> D3 */
+
+static const sfx_t SFX_STAGE = SFX_DEF(SFX_STAGE_STEPS, AUDIO_WAVE_SQUARE, 190);
+static const sfx_t SFX_TICK = SFX_DEF(SFX_TICK_STEPS, AUDIO_WAVE_SQUARE, 215);
+static const sfx_t SFX_TICK_WARN = SFX_DEF(SFX_TICK_WARN_STEPS, AUDIO_WAVE_SQUARE, 235);
+static const sfx_t SFX_SUCCESS = SFX_DEF(SFX_SUCCESS_STEPS, AUDIO_WAVE_SQUARE, 215);
+static const sfx_t SFX_EXPLODE = SFX_DEF(SFX_EXPLODE_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_RUMBLE = SFX_DEF(SFX_RUMBLE_STEPS, AUDIO_WAVE_TRIANGLE, 200);
+
 /* --- ゲーム本体 --- */
 #define BASE_TIME_MS 10000u
 #define MIN_TIME_MS 3000u
@@ -237,6 +271,8 @@ static void start_new_stage(void) {
 
     state = STATE_PLAYING;
 
+    audio_play(&SFX_STAGE);
+
     printf("Stage %d started - Correct button: %c, Time: %.1fs\n", current_stage,
            correct_is_a ? 'A' : 'B', (double)stage_time / 1000.0);
 }
@@ -271,6 +307,7 @@ static void handle_correct_answer(void) {
     timer_pause(&timer);
     draw_pattern(SUCCESS_PATTERN, COUNT_OF(SUCCESS_PATTERN), LED_GREEN);
     effect_start_ms = now_ms();
+    audio_play(&SFX_SUCCESS);
 
     current_stage++;
     if (current_stage > max_stage_reached) {
@@ -284,6 +321,9 @@ static void handle_incorrect_answer(void) {
     timer_pause(&timer);
     draw_pattern(EXPLOSION_PATTERN, COUNT_OF(EXPLOSION_PATTERN), LED_RED);
     effect_start_ms = now_ms();
+    /* ノイズの爆発音と低い下降音を重ねる */
+    audio_play(&SFX_EXPLODE);
+    audio_play(&SFX_RUMBLE);
     printf("Wrong button! Game Over at stage %d\n", current_stage);
     printf("Final Score: Stage %d\n", max_stage_reached);
 }
@@ -335,6 +375,8 @@ static void check_timer(void) {
     timer_pause(&timer);
     draw_pattern(EXPLOSION_PATTERN, COUNT_OF(EXPLOSION_PATTERN), LED_RED);
     effect_start_ms = now_ms();
+    audio_play(&SFX_EXPLODE);
+    audio_play(&SFX_RUMBLE);
     printf("Time's up! Game Over at stage %d\n", current_stage);
     printf("Final Score: Stage %d\n", max_stage_reached);
 }
@@ -392,6 +434,8 @@ static void update_display(void) {
     seg_int02(display_time);
 
     if (display_time != last_display_time) {
+        /* 残り時間が 1 秒進むごとに秒読みを鳴らす */
+        audio_play((fraction <= 0.2f) ? &SFX_TICK_WARN : &SFX_TICK);
         printf("Stage %d - Time: %02ds%s\n", current_stage, display_time,
                (fraction <= 0.2f) ? " [WARNING]" : "");
         last_display_time = display_time;
@@ -451,6 +495,7 @@ static void pause_game(void) {
     if (state == STATE_PLAYING) {
         timer_pause(&timer);
     }
+    audio_stop_all();
     printf("Bomb Defuse Game paused\n");
 }
 
@@ -462,6 +507,7 @@ static void resume_game(void) {
 }
 
 static void finalize(void) {
+    audio_stop_all();
     matrix_fill(LED_OFF);
     matrix_show();
     seg_text(NULL);

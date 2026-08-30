@@ -12,6 +12,42 @@
 #define BLOCK_COUNT (BLOCK_ROWS * MATRIX_WIDTH)
 #define BALL_SPEED 0.125f
 
+/*
+ * --- 効果音 ---
+ *
+ * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。
+ * ブロックは列 (上ほど高い) ごとに音程を変えて、崩した位置が耳でも分かるようにした。
+ * 反射音はラリー中ずっと鳴るので短く弱め、破壊音とゲーム終了音だけを目立たせる。
+ */
+static const sfx_step_t SFX_PADDLE_MOVE_STEPS[] = {SFX_TONE(587, 18)}; /* D5 */
+static const sfx_step_t SFX_WALL_STEPS[] = {SFX_TONE(880, 22)};        /* A5 */
+static const sfx_step_t SFX_PADDLE_HIT_STEPS[] = {SFX_TONE(440, 30)};  /* A4 */
+static const sfx_step_t SFX_BLOCK_TOP_STEPS[] = {SFX_TONE(1397, 45)};  /* F6 (最上段) */
+static const sfx_step_t SFX_BLOCK_MID_STEPS[] = {SFX_TONE(1047, 45)};  /* C6 */
+static const sfx_step_t SFX_BLOCK_LOW_STEPS[] = {SFX_TONE(784, 45)};   /* G5 (最下段) */
+static const sfx_step_t SFX_CLEAR_STEPS[] = {
+    SFX_TONE(587, 45),  /* D5 */
+    SFX_TONE(784, 45),  /* G5 */
+    SFX_TONE(1047, 45), /* C6 */
+    SFX_TONE(1397, 45), /* F6 */
+    SFX_REST(30),
+    SFX_TONE(1760, 160), /* A6 */
+};
+static const sfx_step_t SFX_CRASH_STEPS[] = {SFX_SWEEP(500, 90, 180)};
+static const sfx_step_t SFX_FALL_STEPS[] = {SFX_SWEEP(392, 147, 420)}; /* G4 -> D3 */
+
+static const sfx_t SFX_PADDLE_MOVE = SFX_DEF(SFX_PADDLE_MOVE_STEPS, AUDIO_WAVE_TRIANGLE, 120);
+static const sfx_t SFX_WALL = SFX_DEF(SFX_WALL_STEPS, AUDIO_WAVE_TRIANGLE, 150);
+static const sfx_t SFX_PADDLE_HIT = SFX_DEF(SFX_PADDLE_HIT_STEPS, AUDIO_WAVE_SQUARE, 200);
+static const sfx_t SFX_BLOCK_ROW[BLOCK_ROWS] = {
+    SFX_DEF(SFX_BLOCK_TOP_STEPS, AUDIO_WAVE_SQUARE, 210),
+    SFX_DEF(SFX_BLOCK_MID_STEPS, AUDIO_WAVE_SQUARE, 210),
+    SFX_DEF(SFX_BLOCK_LOW_STEPS, AUDIO_WAVE_SQUARE, 210),
+};
+static const sfx_t SFX_CLEAR = SFX_DEF(SFX_CLEAR_STEPS, AUDIO_WAVE_SQUARE, 220);
+static const sfx_t SFX_CRASH = SFX_DEF(SFX_CRASH_STEPS, AUDIO_WAVE_NOISE, 255);
+static const sfx_t SFX_FALL = SFX_DEF(SFX_FALL_STEPS, AUDIO_WAVE_TRIANGLE, 190);
+
 typedef enum {
     STATE_PLAYING,
     STATE_GAME_OVER,
@@ -100,7 +136,11 @@ static bool handle_paddle_input(void) {
         paddle.x--;
     }
 
-    return paddle.x != prev_x;
+    bool moved = paddle.x != prev_x;
+    if (moved) {
+        audio_play(&SFX_PADDLE_MOVE);
+    }
+    return moved;
 }
 
 static bool move_objects(void) {
@@ -121,12 +161,14 @@ static bool check_wall_collisions(void) {
         ball.vx = -ball.vx;
         ball.x = (ball.x <= 0.0f) ? 0.0f : 7.0f;
         collided = true;
+        audio_play(&SFX_WALL);
     }
 
     if (ball.y <= 0.0f) {
         ball.vy = -ball.vy;
         ball.y = 0.0f;
         collided = true;
+        audio_play(&SFX_WALL);
     }
 
     if (ball.y >= 8.0f) {
@@ -150,6 +192,8 @@ static bool check_paddle_collision(void) {
         ball.vx = BALL_SPEED * angle_factor;
         ball.vy = -((ball.vy < 0.0f) ? -ball.vy : ball.vy);
         ball.y = 6.0f;
+
+        audio_play(&SFX_PADDLE_HIT);
         return true;
     }
     return false;
@@ -172,6 +216,7 @@ static bool check_block_collisions(void) {
     block_active[index] = false;
     ball.vy = -ball.vy;
     score++;
+    audio_play(&SFX_BLOCK_ROW[by]);
     return true;
 }
 
@@ -191,9 +236,13 @@ static void show_game_end_display(void) {
     if (state == STATE_GAME_CLEAR) {
         printf("Game Clear! Score: %d\n", score);
         matrix_fill(LED_GREEN);
+        audio_play(&SFX_CLEAR);
     } else if (state == STATE_GAME_OVER) {
         printf("Game Over! Score: %d\n", score);
         matrix_fill(LED_RED);
+        /* ノイズの衝撃音と下降する三角波を重ねる */
+        audio_play(&SFX_CRASH);
+        audio_play(&SFX_FALL);
     }
 
     update_score_display();
@@ -244,6 +293,7 @@ static void update(void) {
 }
 
 static void finalize(void) {
+    audio_stop_all();
     matrix_fill(LED_OFF);
     matrix_show();
     seg_text(NULL);

@@ -8,6 +8,23 @@
 
 #define GRAVITY 0.08f
 
+/*
+ * --- 効果音 ---
+ *
+ * 音程はプロジェクト共通の 4 度堆積 (D - G - C - F) から選ぶ。
+ * ボールは頻繁に跳ねるので、床は短い下降、壁はさらに短く弱い音にして
+ * 鳴り続けてもうるさくならないようにしている。
+ */
+static const sfx_step_t SFX_BOUNCE_STEPS[] = {SFX_SWEEP(587, 294, 45)}; /* D5 -> D4 */
+static const sfx_step_t SFX_WALL_STEPS[] = {SFX_TONE(880, 25)};        /* A5 */
+static const sfx_step_t SFX_TOGGLE_A_STEPS[] = {SFX_TONE(1047, 35)};   /* C6 */
+static const sfx_step_t SFX_TOGGLE_B_STEPS[] = {SFX_TONE(784, 35)};    /* G5 */
+
+static const sfx_t SFX_BOUNCE = SFX_DEF(SFX_BOUNCE_STEPS, AUDIO_WAVE_TRIANGLE, 200);
+static const sfx_t SFX_WALL = SFX_DEF(SFX_WALL_STEPS, AUDIO_WAVE_TRIANGLE, 150);
+static const sfx_t SFX_TOGGLE_A = SFX_DEF(SFX_TOGGLE_A_STEPS, AUDIO_WAVE_SQUARE, 160);
+static const sfx_t SFX_TOGGLE_B = SFX_DEF(SFX_TOGGLE_B_STEPS, AUDIO_WAVE_SQUARE, 160);
+
 static struct {
     float x, y;
     float vx, vy;
@@ -24,13 +41,16 @@ static void ball_update(void) {
     if (ball.x >= MATRIX_WIDTH - 1) {
         ball.x = MATRIX_WIDTH - 1;
         ball.vx = -ball.vx;
+        audio_play(&SFX_WALL);
     } else if (ball.x <= 0) {
         ball.x = 0;
         ball.vx = -ball.vx;
+        audio_play(&SFX_WALL);
     }
     if (ball.y >= MATRIX_HEIGHT - 1) {
         ball.y = MATRIX_HEIGHT - 1;
         ball.vy = -1.0f;
+        audio_play(&SFX_BOUNCE);
     }
 }
 
@@ -60,9 +80,11 @@ static void update(void) {
 
     if (btn_a_fell()) {
         btn_a_toggle = !btn_a_toggle;
+        audio_play(&SFX_TOGGLE_A);
     }
     if (btn_b_fell()) {
         btn_b_toggle = !btn_b_toggle;
+        audio_play(&SFX_TOGGLE_B);
     }
     matrix_set(7, 0, btn_a_toggle ? LED_GREEN : LED_OFF);
     matrix_set(0, 0, btn_b_toggle ? LED_GREEN : LED_OFF);
@@ -71,6 +93,7 @@ static void update(void) {
 }
 
 static void finalize(void) {
+    audio_stop_all();
     matrix_fill(LED_OFF);
     matrix_show();
 }
