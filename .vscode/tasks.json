@@ -2,14 +2,30 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Copy code.py to CIRCUITPY",
+      "label": "Build firmware",
       "type": "shell",
       "command": "pwsh.exe",
       "args": [
         "-ExecutionPolicy", "Bypass",
-        "-File", "${workspaceFolder}/copy-to-circuitpy.ps1"
+        "-File", "${workspaceFolder}/build.ps1"
       ],
-      "group": "build"
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Rebuild firmware (clean)",
+      "type": "shell",
+      "command": "pwsh.exe",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/build.ps1",
+        "-Clean"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
     }
   ]
 }
