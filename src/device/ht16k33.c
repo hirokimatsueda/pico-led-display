@@ -1,3 +1,14 @@
+/*
+ * このファイルの 7 セグメント用フォントテーブル (SEG_FONT) は、
+ * Adafruit CircuitPython HT16K33 ライブラリ (MIT) の segments.py にある
+ * NUMBERS テーブルをそのまま使用しています。
+ *
+ * SPDX-FileCopyrightText: Radomir Dopieralski 2016 for Adafruit Industries
+ * SPDX-FileCopyrightText: Tony DiCola 2016 for Adafruit Industries
+ * SPDX-License-Identifier: MIT
+ *
+ * 出典と全文は THIRD_PARTY_NOTICES.md を参照。
+ */
 #include <string.h>
 #include "device/ht16k33.h"
 

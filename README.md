@@ -187,6 +187,14 @@ audio_play_sample(sfx_explosion, SFX_EXPLOSION_LENGTH, SFX_EXPLOSION_RATE, 200);
   (この場合はカットオフを保つためコンデンサを 10nF → 15nF に変えること)
 - スピーカーは口径が大きいほど、また箱に入れるほど体感音量が上がる
 
+## ライセンス
+
+MIT License (`LICENSE` を参照)。
+
+7 セグメント用のフォントテーブルのみ、MIT ライセンスの
+[Adafruit CircuitPython HT16K33](https://github.com/adafruit/Adafruit_CircuitPython_HT16K33)
+から使用しています。著作権表示は `THIRD_PARTY_NOTICES.md` にまとめてあります。
+
 ## v1 (CircuitPython 版) について
 
 `v1` タグに CircuitPython 実装が残っています。同じ 5 ゲーム・同じ配線で動作しますが、
