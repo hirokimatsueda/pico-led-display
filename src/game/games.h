@@ -6,7 +6,7 @@
 
 extern const game_t game_bouncing_ball;
 extern const game_t game_falling_dot;
-extern const game_t game_breakout;
+extern const game_t game_block_breaker;
 extern const game_t game_bomb_defuse;
 extern const game_t game_jump_runner;
 

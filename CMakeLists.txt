@@ -21,7 +21,7 @@ add_executable(pico_led_display
     src/game/selector.c
     src/game/bouncing_ball.c
     src/game/falling_dot.c
-    src/game/breakout.c
+    src/game/block_breaker.c
     src/game/bomb_defuse.c
     src/game/jump_runner.c
 )

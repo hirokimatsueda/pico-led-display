@@ -52,7 +52,7 @@ typedef enum {
     STATE_PLAYING,
     STATE_GAME_OVER,
     STATE_GAME_CLEAR,
-} breakout_state_t;
+} block_breaker_state_t;
 
 static struct {
     int x; /* パドル中央の X 座標 */
@@ -69,7 +69,7 @@ static bool block_active[BLOCK_COUNT];
 static bool is_running;
 static bool score_shown;
 static int score;
-static breakout_state_t state;
+static block_breaker_state_t state;
 static bool both_pressed_prev;
 
 static inline int block_x(int i) { return i % MATRIX_WIDTH; }
@@ -299,8 +299,8 @@ static void finalize(void) {
     seg_text(NULL);
 }
 
-const game_t game_breakout = {
-    .name = "Breakout",
+const game_t game_block_breaker = {
+    .name = "BlockBreaker",
     .initialize = initialize,
     .update = update,
     .finalize = finalize,

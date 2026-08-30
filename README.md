@@ -98,7 +98,7 @@ src/
     selector.c         ゲームセレクター (通常モード / 選択モードの状態機械)
     bouncing_ball.c    ボールが跳ねるだけのデモ
     falling_dot.c      落ちてくるドットを避ける
-    breakout.c         ブロック崩し
+    block_breaker.c    ブロック崩し
     bomb_defuse.c      爆弾解除 (ワイヤーの色を記憶して正解ボタンを押す)
     jump_runner.c      横スクロールのジャンプアクション
 tools/wav2c.py         WAV を C 配列に変換する
@@ -138,7 +138,7 @@ audio_play(&SFX_JUMP);
 |---|---|
 | bouncing_ball | 床の跳ね返り / 壁の跳ね返り / ボタンのトグル (A・B で音程違い) |
 | falling_dot | 開始 / 左右移動 / ドットを 1 つ避けた / 衝突 |
-| breakout | パドル移動 / 壁反射 / パドル反射 / ブロック破壊 (列ごとに音程が変わる) / クリア / ゲームオーバー |
+| block_breaker | パドル移動 / 壁反射 / パドル反射 / ブロック破壊 (列ごとに音程が変わる) / クリア / ゲームオーバー |
 | bomb_defuse | ステージ開始 / 1 秒ごとの秒読み (残り 20% 以下は高く鋭い音) / 正解 / 爆発 |
 | jump_runner | 開始 / ジャンプ / 大ジャンプ / しゃがみ / 障害物通過 / 衝突 |
 

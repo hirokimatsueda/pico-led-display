@@ -19,7 +19,7 @@
 
 /* 実行可能なゲームのレジストリ。ゲームを追加したらここに並べる */
 static const game_t *const GAME_LIST[] = {
-    &game_bouncing_ball, &game_falling_dot, &game_breakout, &game_bomb_defuse, &game_jump_runner,
+    &game_bouncing_ball, &game_falling_dot, &game_block_breaker, &game_bomb_defuse, &game_jump_runner,
 };
 #define GAME_COUNT ((int)(sizeof(GAME_LIST) / sizeof(GAME_LIST[0])))
 
