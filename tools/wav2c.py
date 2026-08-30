@@ -6,66 +6,110 @@ audio_play_sample() が扱う符号付き 8bit モノラルの PCM として出�
 生成したヘッダをインクルードすればフラッシュに焼き込まれ、XIP でそのまま
 再生されるので RAM を消費しない。
 
+サンプリングレートは変換せず、元のレートをそのままヘッダに書き出す
+(再生側が位相の進みで合わせるため、任意のレートで鳴らせる)。
+
 使い方:
     python tools/wav2c.py explosion.wav src/game/sfx_explosion.h
 """
 
 import argparse
-import audioop
+import array
+import re
 import sys
 import wave
+from pathlib import Path
 
 
-def convert(src_path: str, dst_path: str, name: str | None = None) -> None:
-    with wave.open(src_path, "rb") as wav:
+def read_samples(path):
+    """WAV を読み、-128..127 に正規化したモノラルのサンプル列を返す"""
+    with wave.open(str(path), "rb") as wav:
         channels = wav.getnchannels()
         width = wav.getsampwidth()
         rate = wav.getframerate()
-        frames = wav.readframes(wav.getnframes())
+        raw = wav.readframes(wav.getnframes())
 
-    # モノラル・符号付き 8bit に揃える
-    if channels > 1:
-        frames = audioop.tomono(frames, width, 0.5, 0.5)
-    if width != 1:
-        frames = audioop.lin2lin(frames, width, 1)
+    if width == 1:
+        # 8bit WAV だけは符号なし
+        samples = [b - 128 for b in raw]
+    elif width == 2:
+        buf = array.array("h")
+        buf.frombytes(raw)
+        if sys.byteorder == "big":
+            buf.byteswap()  # WAV はリトルエンディアン
+        samples = [v >> 8 for v in buf]
+    elif width == 3:
+        samples = [
+            int.from_bytes(raw[i : i + 3], "little", signed=True) >> 16
+            for i in range(0, len(raw) - 2, 3)
+        ]
+    elif width == 4:
+        buf = array.array("i")
+        buf.frombytes(raw)
+        if sys.byteorder == "big":
+            buf.byteswap()
+        samples = [v >> 24 for v in buf]
     else:
-        # 8bit WAV は符号なしなので符号付きに直す
-        frames = audioop.bias(frames, 1, -128)
+        raise ValueError(f"未対応のサンプル幅です: {width * 8}bit")
 
-    symbol = name or "sfx_" + "".join(c if c.isalnum() else "_" for c in src_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]).lower()
+    if channels > 1:
+        # 全チャンネルを平均してモノラルに落とす
+        frames = len(samples) // channels
+        samples = [
+            sum(samples[i * channels : (i + 1) * channels]) // channels
+            for i in range(frames)
+        ]
 
+    samples = [max(-128, min(127, v)) for v in samples]
+    return samples, rate
+
+
+def to_symbol(path):
+    """ファイル名から C の識別子を作る"""
+    stem = re.sub(r"[^0-9a-zA-Z]+", "_", Path(path).stem).strip("_").lower()
+    if not stem or stem[0].isdigit():
+        stem = "sfx_" + stem
+    return stem
+
+
+def write_header(out_path, symbol, samples, rate):
     lines = [
-        "/* {} から自動生成 ({} Hz, {} サンプル) */".format(src_path, rate, len(frames)),
+        f"/* {symbol}: 自動生成 ({rate} Hz, {len(samples)} サンプル) */",
         "#pragma once",
+        "",
         "#include <stdint.h>",
         "",
-        "#define {}_RATE {}".format(symbol.upper(), rate),
-        "#define {}_LENGTH {}".format(symbol.upper(), len(frames)),
+        f"#define {symbol.upper()}_RATE {rate}",
+        f"#define {symbol.upper()}_LENGTH {len(samples)}",
         "",
-        "static const int8_t {}[] = {{".format(symbol),
+        f"static const int8_t {symbol}[] = {{",
     ]
-    for i in range(0, len(frames), 16):
-        chunk = frames[i : i + 16]
-        values = ", ".join(str(b - 256 if b > 127 else b) for b in chunk)
-        lines.append("    " + values + ",")
+    for i in range(0, len(samples), 16):
+        chunk = ", ".join(str(v) for v in samples[i : i + 16])
+        lines.append(f"    {chunk},")
     lines.append("};")
     lines.append("")
 
-    with open(dst_path, "w", encoding="utf-8") as out:
-        out.write("\n".join(lines))
-
-    kib = len(frames) / 1024
-    print("{} -> {} ({:.1f} KiB, {} Hz)".format(src_path, dst_path, kib, rate))
+    Path(out_path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", help="入力 WAV ファイル")
     parser.add_argument("output", help="出力 C ヘッダ")
-    parser.add_argument("--name", help="生成する配列名", default=None)
+    parser.add_argument("--name", help="生成する配列名 (既定はファイル名から)")
     args = parser.parse_args()
 
-    convert(args.input, args.output, args.name)
+    samples, rate = read_samples(args.input)
+    symbol = args.name or to_symbol(args.input)
+    write_header(args.output, symbol, samples, rate)
+
+    kib = len(samples) / 1024
+    seconds = len(samples) / rate if rate else 0
+    print(
+        f"{args.input} -> {args.output}"
+        f"  ({symbol}, {kib:.1f} KiB, {rate} Hz, {seconds:.2f} 秒)"
+    )
     return 0
 
 
